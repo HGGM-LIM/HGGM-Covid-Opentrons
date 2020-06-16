@@ -537,12 +537,11 @@ def run(ctx: protocol_api.ProtocolContext):
         reset_tipcount()
 
 
-    if not robot.is_simulating():
-        # confirm door is close
-        robot.comment(f"Please, close the door")
-        confirm_door_is_closed()
+    # confirm door is close
+    robot.comment(f"Please, close the door")
+    confirm_door_is_closed()
 
-        start = start_run()
+    start = start_run()
 
 
     # #####################################################
@@ -649,22 +648,19 @@ def run(ctx: protocol_api.ProtocolContext):
     buffer_rack = robot.load_labware('opentrons_6_tuberack_falcon_50ml_conical', '7',
         '6_tuberack_falcon source rack')
 
-    protK_rack = robot.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '9',
+    protK_rack = ctx.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '9',
             'source tuberack ')
     
-    dest_rack = robot.load_labware('nest_96_wellplate_2ml_deep', '8', 'source tuberack ')
+    dest_rack = ctx.load_labware('nest_96_wellplate_2ml_deep', '8', 'source tuberack ')
 
     # -----------------------------------------------------
     # Reagens
     # -----------------------------------------------------
     lisis_reagent = Reagent(name = 'Lisis',
-                    flow_rate_aspirate = 300,
-                    flow_rate_dispense = 300,
-                    flow_rate_aspirate_mix = 300,
-                    flow_rate_dispense_mix = 300,
-                    delay_aspirate=2,
-					touch_tip_aspirate_speed=70,
-                    touch_tip_dispense_speed=70)
+                    flow_rate_aspirate = 600,
+                    flow_rate_dispense = 1000,
+                    flow_rate_aspirate_mix = 600,
+                    flow_rate_dispense_mix = 1000)
                     
     protK_reagent = Reagent(name = 'Proteinasa K',
                     flow_rate_aspirate = 600,
@@ -676,21 +672,21 @@ def run(ctx: protocol_api.ProtocolContext):
     # Tubes
     # -----------------------------------------------------
     lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 20000,
+                actual_volume = 30000,
                 max_volume = 50000,
                 diameter = 27.81, # avl1.diameter
                 base_type = 2,
                 height_base = 15.6)    
                 
     lisis_tube2 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 20000,
+                actual_volume = 30000,
                 max_volume = 50000,
                 diameter = 27.81, # avl1.diameter
                 base_type = 2,
                 height_base = 15.6)
                 
     protK_tube = Tube(name = 'Generic 1.5mL safelock snapcap Tubes',
-                actual_volume = 900,
+                actual_volume = 1000,
                 max_volume = 2000,
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
@@ -710,7 +706,6 @@ def run(ctx: protocol_api.ProtocolContext):
 
         protK = protK_rack['A1']
 
-
         distribute_custom(pip = p20,
                         reagent = protK_reagent,
                         tube_type = protK_tube,
@@ -718,10 +713,8 @@ def run(ctx: protocol_api.ProtocolContext):
                         src = protK,
                         dest = dest_rack.wells(),
                         extra_dispensal=0,
-                        disp_height=5,
                         touch_tip_aspirate=False,
                         touch_tip_dispense=False)
-
         drop(p20)
 
     # -----------------------------------------------------
@@ -733,36 +726,20 @@ def run(ctx: protocol_api.ProtocolContext):
             pick_up(p1000,tips1000)
 
         lisis = buffer_rack['A3']
-
-        dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,24))
+        dest1 = [well for pl in dest_rack.columns()[:6] for well in pl]
 
-        #for dest in list_dest:
-            # transfer buffer to tubes
-        
-        for dest in list_dest:
-
-            custom_mix(pip = p1000,
-                            reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 750,
-                            location=lisis,
-                            mix_height=10,
-                            source_height=10)   
-
-            distribute_custom(pip = p1000,
-                            reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
-                            volume = 550,
-                            src = lisis,
-                            dest = dest,
-                            extra_dispensal=0,
-                            disp_height=20,
-                            touch_tip_aspirate=True,
-                            touch_tip_dispense=True)
-            
-            
+        # transfer buffer to tubes
+        distribute_custom(pip = p1000,
+                        reagent = lisis_reagent,
+                        tube_type = lisis_tube1,
+                        volume = 550,
+                        src = lisis,
+                        dest = dest1,
+                        extra_dispensal=0,
+                        disp_height=20,
+                        touch_tip_aspirate=False,
+                        touch_tip_dispense=False)
                         
         drop(p1000)
         
@@ -776,33 +753,20 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['B3']
         
-        # transfer buffer to tubes
-        dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
-        
-        list_dest = list(divide_destinations(dest_wells,24))
+        dest2 = [well for pl in dest_rack.columns()[6:] for well in pl]
 
-        for dest in list_dest:
         # transfer buffer to tubes
-
-            custom_mix(pip = p1000,
-                    reagent = lisis_reagent,
-                    repetitions=2,
-                    volume = 750,
-                    location=lisis,
-                    mix_height=10,
-                    source_height=10)    
-        
-            distribute_custom(pip = p1000,
-                            reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
-                            volume = 550,
-                            src = lisis,
-                            dest = dest,
-                            extra_dispensal=0,
-                            disp_height=20,
-                            touch_tip_aspirate=True,
-                            touch_tip_dispense=True)            
-                        
+        distribute_custom(pip = p1000,
+                     reagent = lisis_reagent,
+                     tube_type = lisis_tube2,
+                     volume = 550,
+                     src = lisis,
+                     dest = dest2,
+                     extra_dispensal=0,
+                     disp_height=20,
+                     touch_tip_aspirate=False,
+                     touch_tip_dispense=False)
+                     
         drop(p1000)
     
     # -----------------------------------------------------
@@ -810,8 +774,8 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     STEPS = {
         1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Proteinasa K'},
-        2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 6 columns'},
-        3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis last 6 columns'}
+        2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 4 columns'},
+        3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis last 4 columns'}
     }
 
     # #####################################################
@@ -826,17 +790,16 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Stats
     # -----------------------------------------------------
-    if not robot.is_simulating():
-        end = finish_run()
+    end = finish_run()
 
 
 
-        robot.comment('===============================================')
-        robot.comment('Start time:   ' + str(start))
-        robot.comment('Finish time:  ' + str(end))
-        robot.comment('Elapsed time: ' + str(datetime.strptime(end, "%Y/%m/%d %H:%M:%S") - datetime.strptime(start, "%Y/%m/%d %H:%M:%S")))
-        for key in tip_log['used']:
-            val = tip_log['used'][key]
-            robot.comment('Tips "' + str(key) + '" used: ' + str(val))
-        robot.comment('===============================================')
+    robot.comment('===============================================')
+    robot.comment('Start time:   ' + str(start))
+    robot.comment('Finish time:  ' + str(end))
+    robot.comment('Elapsed time: ' + str(datetime.strptime(end, "%Y/%m/%d %H:%M:%S") - datetime.strptime(start, "%Y/%m/%d %H:%M:%S")))
+    for key in tip_log['used']:
+        val = tip_log['used'][key]
+        robot.comment('Tips "' + str(key) + '" used: ' + str(val))
+    robot.comment('===============================================')
 

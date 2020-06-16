@@ -637,20 +637,20 @@ def run(ctx: protocol_api.ProtocolContext):
     # Labware
     # -----------------------------------------------------
     wash1_elution_buffer_rack = robot.load_labware('nest_12_reservoir_15ml', '8',
-        'nest_12_reservoir_15ml')
+        'Reservorio Wash 1 y Elucion')
 
     wash2_buffer_rack = robot.load_labware('nest_12_reservoir_15ml', '7',
-        'nest_12_reservoir_15ml')    
+        'Reservorio Wash 2')    
 
 
-    wash1_dest_rack = robot.load_labware('nest_96_wellplate_2ml_deep', '5', 
-        'source tuberack ')
+    wash1_dest_rack = robot.load_labware('nest_96_wellplate_2ml_deep', '11', 
+        'Placa Wash 1')
    
     wash2_dest_rack = robot.load_labware('nest_96_wellplate_2ml_deep', '10', 
-        'source tuberack ')
+        'Placa Wash 2 ')
     
-    elution_dest_rack = robot.load_labware('thermofishermicroplate_96_wellplate_320ul','11',
-        'thermofishermicroplate_96_wellplate_320ul')
+    elution_dest_rack = robot.load_labware('thermofishermicroplate_96_wellplate_320ul','5',
+        'Placa Elucion')
     
     # -----------------------------------------------------
     # Reagens
@@ -677,14 +677,14 @@ def run(ctx: protocol_api.ProtocolContext):
     # Tubes
     # -----------------------------------------------------
     wash1_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 1250, 
+                actual_volume = 625, 
                 max_volume = 1875, # 15000 / 8 => Max reservoir plate / num rows
                 diameter = 9.4, 
                 base_type = 3,
                 height_base = 0)    
                 
     wash2_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 1250, 
+                actual_volume = 625, 
                 max_volume = 1875, # 15000 / 8 => Max reservoir plate / num rows
                 diameter = 9.4, 
                 base_type = 3,

@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
 __contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
@@ -261,7 +261,7 @@ def check_door():
     else:
         return False
 
-def confirm_door_is_closed():
+def confirm_door_is_closed(photosensitivity=False):
     if not robot.is_simulating():
         #Check if door is opened
         if check_door() == False:
@@ -270,31 +270,43 @@ def confirm_door_is_closed():
             robot.pause()
             notification('close_door')
             time.sleep(5)
-            confirm_door_is_closed()
+            confirm_door_is_closed(photosensitivity=False)
         else:
-            #Set light color to green
-            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            if photosensitivity==False:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            else:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
-def start_run():
+def start_run(photosensitivity=False):
     notification('start')
-    robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    if photosensitivity==False:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    else:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  False)
     now = datetime.now()
     # dd/mm/YY H:M:S
     start_time = now.strftime("%Y/%m/%d %H:%M:%S")
     return start_time
 
-def finish_run():
+def finish_run(photosensitivity=False):
     notification('finish')
     #Set light color to blue
     robot._hw_manager.hardware.set_lights(button = True, rails =  False)
     now = datetime.now()
     # dd/mm/YY H:M:S
     finish_time = now.strftime("%Y/%m/%d %H:%M:%S")
-    for i in range(3):
-        robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-        time.sleep(0.3)
-        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-        time.sleep(0.3)
+    if photosensitivity==False:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            time.sleep(0.3)
+    else:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+            time.sleep(0.3)
     return finish_time
 
 def reset_tipcount(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
@@ -537,7 +549,7 @@ def run(ctx: protocol_api.ProtocolContext):
         reset_tipcount()
 
     if not robot.is_simulating():
-        start = start_run()
+        start = start_run(photosensitivity=False)
 
 
     # Labware
@@ -788,7 +800,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Stats
     # -----------------------------------------------------
     if not robot.is_simulating():
-        end = finish_run()
+        end = finish_run(photosensitivity=False)
 
         robot.comment('===============================================')
         robot.comment('Start time:   ' + str(start))
