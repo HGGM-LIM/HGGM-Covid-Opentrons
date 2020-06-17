@@ -659,11 +659,10 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     lisis_reagent = Reagent(name = 'Lisis',
                     flow_rate_aspirate = 300,
-                    flow_rate_dispense = 300,
+                    flow_rate_dispense = 1,
                     flow_rate_aspirate_mix = 300,
                     flow_rate_dispense_mix = 300,
-                    delay_aspirate=2,
-					touch_tip_aspirate_speed=70,
+                    delay=3,
                     touch_tip_dispense_speed=70)
                     
     protK_reagent = Reagent(name = 'Proteinasa K',
@@ -736,7 +735,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
         dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,24))
+        list_dest = list(divide_destinations(dest_wells,8))
 
         #for dest in list_dest:
             # transfer buffer to tubes
@@ -745,11 +744,11 @@ def run(ctx: protocol_api.ProtocolContext):
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
+                            repetitions=3,
                             volume = 750,
                             location=lisis,
-                            mix_height=10,
-                            source_height=10)   
+                            mix_height=15,
+                            source_height=15)   
 
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
@@ -779,18 +778,18 @@ def run(ctx: protocol_api.ProtocolContext):
         # transfer buffer to tubes
         dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,24))
+        list_dest = list(divide_destinations(dest_wells,8))
 
         for dest in list_dest:
         # transfer buffer to tubes
 
             custom_mix(pip = p1000,
                     reagent = lisis_reagent,
-                    repetitions=2,
+                    repetitions=3,
                     volume = 750,
                     location=lisis,
-                    mix_height=10,
-                    source_height=10)    
+                    mix_height=15,
+                    source_height=15)    
         
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,

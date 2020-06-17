@@ -1,3 +1,3 @@
 # HGGM-Covid-Opentrons
 
-#### Last: 12/06/2020 by Alicia Arévalo
+#### Last: 16/06/2020 by Alicia Arévalo
