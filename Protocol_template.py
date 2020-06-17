@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
 __contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
@@ -53,6 +53,7 @@ metadata = {
 NUM_SAMPLES = 96
 RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
+recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -135,7 +136,7 @@ class Tube:
     """
     
     def __init__(self, name, max_volume, actual_volume, diameter, 
-                 base_type, height_base):
+                 base_type, height_base, min_height=0.5, reservoir = False):
         """Summary
         
         Args:
@@ -152,6 +153,8 @@ class Tube:
         self._diameter = diameter
         self._base_type = base_type
         self._height_base = height_base
+        self._min_height = min_height
+        self._reservoir = reservoir
 
         if base_type == 1:
             self._volume_base = (math.pi * diameter**3) / 12
@@ -163,6 +166,10 @@ class Tube:
             self._height_base = 0
 
     @property
+    def reservoir(self):
+        return self._reservoir
+    
+    @property
     def actual_volume(self):
         return self._actual_volume
 
@@ -170,15 +177,15 @@ class Tube:
     def actual_volume(self, value):
         self._actual_volume = value
 
-    def calc_height(self, aspirate_volume, min_height=0.5):
+    def calc_height(self, aspirate_volume):
         volume_cylinder = self._actual_volume - self._volume_base
         if volume_cylinder <= aspirate_volume:
-            height = min_height
+            height = self._min_height
         else:
             cross_section_area = (math.pi * self._diameter**2) / 4   
             height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
-            if height < min_height:
-                height = min_height
+            if height < self._min_height:
+                height = self._min_height
 
         return height
 
@@ -261,7 +268,7 @@ def check_door():
     else:
         return False
 
-def confirm_door_is_closed():
+def confirm_door_is_closed(photosensitivity=False):
     if not robot.is_simulating():
         #Check if door is opened
         if check_door() == False:
@@ -270,31 +277,43 @@ def confirm_door_is_closed():
             robot.pause()
             notification('close_door')
             time.sleep(5)
-            confirm_door_is_closed()
+            confirm_door_is_closed(photosensitivity=False)
         else:
-            #Set light color to green
-            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            if photosensitivity==False:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            else:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
-def start_run():
+def start_run(photosensitivity=False):
     notification('start')
-    robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    if photosensitivity==False:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    else:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  False)
     now = datetime.now()
     # dd/mm/YY H:M:S
     start_time = now.strftime("%Y/%m/%d %H:%M:%S")
     return start_time
 
-def finish_run():
+def finish_run(photosensitivity=False):
     notification('finish')
     #Set light color to blue
     robot._hw_manager.hardware.set_lights(button = True, rails =  False)
     now = datetime.now()
     # dd/mm/YY H:M:S
     finish_time = now.strftime("%Y/%m/%d %H:%M:%S")
-    for i in range(3):
-        robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-        time.sleep(0.3)
-        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-        time.sleep(0.3)
+    if photosensitivity==False:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            time.sleep(0.3)
+    else:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+            time.sleep(0.3)
     return finish_time
 
 def reset_tipcount(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
@@ -374,19 +393,26 @@ resuming.')
     # Optional only to prevente cacelations
     # save_tip_info()
     tip_log['count'][pip] += 1
-    tip_log['used'][pip] += 1
-
-
+    if "8-Channel" not in str(pip):
+        tip_log['used'][pip] += 1
+    else:
+        tip_log['used'][pip] += 8
 def drop(pip):
     global switch
-    if "8-Channel" not in str(pip):
-        side = 1 if switch else -1
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
-        pip.drop_tip(drop_loc,home_after=False)
-        switch = not switch
+    if recycle_tip:
+								  
+																					
+        pip.return_tip()
+						   
     else:
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
-        pip.drop_tip(drop_loc,home_after=False)
+        if "8-Channel" not in str(pip):
+            side = 1 if switch else -1
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
+            pip.drop_tip(drop_loc,home_after=False)
+            switch = not switch
+        else:
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+            pip.drop_tip(drop_loc,home_after=False)
 
 # Function definitions
 ## General purposes
@@ -453,7 +479,10 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             for i in range(len(list_dest)):
                 pickup_height = tube_type.calc_height(volume_per_asp)
 
-                tube_type.actual_volume -= (max_trans_per_asp * volume)
+                if tube_type.reservoir:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+                else:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume)
                 
                 pip.aspirate(volume=volume_per_asp, 
                             location=src.bottom(pickup_height),
@@ -494,9 +523,12 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
 
                     pickup_height = tube_type.calc_height(volume_per_asp)
 
-                    tube_type.actual_volume -= vol
-                
-                    pip.aspirate(volume=volume_per_asp, 
+                    if tube_type.reservoir:
+                        tube_type.actual_volume -= (vol * 8)
+                    else:
+                        tube_type.actual_volume -= vol
+
+					pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
 
@@ -537,7 +569,7 @@ def run(ctx: protocol_api.ProtocolContext):
         reset_tipcount()
 
     if not robot.is_simulating():
-        start = start_run()
+        start = start_run(photosensitivity=False)
 
 
     # Labware
@@ -724,8 +756,24 @@ def run(ctx: protocol_api.ProtocolContext):
                 diameter = 8.7, 
                 base_type = 3,
                 height_base = 0)     
-
-    
+	pool_tube = Tube(name = 'nest_1_reservoir_195ml',
+                actual_volume = 195000, 
+                max_volume = 195000, 
+                diameter = 99.68, 
+                base_type = 3,
+                height_base = 0,
+                min_height = 3,
+                reservoir = True)
+				
+	swim = Tube(name = 'nest_12_reservoir_15ml',
+                actual_volume = 15000, 
+                max_volume = 15000, 
+                diameter = 26.68, 
+                base_type = 3,
+                height_base = 0,
+                reservoir = True)
+				
+   
     # #####################################################
     # 2. Steps definition
     # #####################################################
@@ -788,7 +836,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Stats
     # -----------------------------------------------------
     if not robot.is_simulating():
-        end = finish_run()
+        end = finish_run(photosensitivity=False)
 
         robot.comment('===============================================')
         robot.comment('Start time:   ' + str(start))
