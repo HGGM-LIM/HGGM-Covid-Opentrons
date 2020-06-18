@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
 __contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
@@ -25,7 +25,7 @@ __version__ = "1.0.0"
 # Imports
 # #####################################################
 from opentrons import protocol_api
-from opentrons.types import Point
+from opentrons.types import Point, Location
 import time
 import math
 import os
@@ -40,7 +40,7 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'KingFisher Lisis Nuevo',
+    'protocolName': 'Template',
     'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
@@ -398,11 +398,13 @@ resuming.')
         tip_log['used'][pip] += 1
     else:
         tip_log['used'][pip] += 8
-
 def drop(pip):
     global switch
-    if recycle_tip:                                                                                 
-        pip.return_tip()       
+    if recycle_tip:
+								  
+																					
+        pip.return_tip()
+						   
     else:
         if "8-Channel" not in str(pip):
             side = 1 if switch else -1
@@ -527,7 +529,7 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
                     else:
                         tube_type.actual_volume -= vol
 
-                    pip.aspirate(volume=volume_per_asp, 
+					pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
 
@@ -567,14 +569,16 @@ def run(ctx: protocol_api.ProtocolContext):
     if RESET_TIPCOUNT:
         reset_tipcount()
 
-
     if not robot.is_simulating():
-        # confirm door is close
-        robot.comment(f"Please, close the door")
-        confirm_door_is_closed()
-
         start = start_run()
 
+
+    # Labware
+    # Positions are:
+    # 10    11      TRASH
+    # 7     8       9
+    # 4     5       6
+    # 1     2       3
 
     # #####################################################
     # Common functions
@@ -640,94 +644,144 @@ def run(ctx: protocol_api.ProtocolContext):
     # #####################################################
     # 1. Start defining deck
     # #####################################################
-    
-    # Labware
-    # Positions are:
-    # 10    11      TRASH
-    # 7     8       9
-    # 4     5       6
-    # 1     2       3
-
 
     # -----------------------------------------------------
     # Tips
     # -----------------------------------------------------
     tips20 = [
         robot.load_labware('opentrons_96_filtertiprack_20ul', slot)
-        for slot in ['11']
+        for slot in ['1', '2', '3', '4']
     ]
-    
+    tips300 = [robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
+        for slot in ['5', '6']
+    ]
+
     tips1000 = [robot.load_labware('opentrons_96_filtertiprack_1000ul', slot)
-        for slot in ['10']
+        for slot in ['7']
     ]
 
     # -----------------------------------------------------
     # Pipettes
     # -----------------------------------------------------
     p20 = robot.load_instrument('p20_single_gen2', 'right', tip_racks=tips20)
-    
+
+    p300 = robot.load_instrument('p300_single_gen2', 'left', tip_racks=tips300)
+
     p1000 = robot.load_instrument('p1000_single_gen2', 'left', tip_racks=tips1000)
 
+    m20 = robot.load_instrument('p20_multi_gen2', 'left', tip_racks=tips20)
+
+    m300 = robot.load_instrument('p300_multi_gen2', 'left', tip_racks=tips300)
+
     ## retrieve tip_log
-    retrieve_tip_info(p20,tips20)
-    
     retrieve_tip_info(p1000,tips1000)
-    
+    retrieve_tip_info(m300,tips300)
+
+    if not p1000.hw_pipette['has_tip']:
+        pick_up(p1000)
+
+    # -----------------------------------------------------
+    # Magnetic module + labware
+    # -----------------------------------------------------
+    # magdeck = robot.load_module('magdeck', '10')
+    # maglab = magdeck.load_labware('nest_1_reservoir_195ml', 'nest_1_reservoir_195ml')
+    # magdeck.disengage()
+    # magdeck.engage()
+
+    # -----------------------------------------------------
+    # Temperature module + labware
+    # -----------------------------------------------------
+    # tempdeck = robot.load_module('tempdeck', '1')
+    # templab = tempdeck.load_labware('nest_12_reservoir_15ml', 'nest_12_reservoir_15ml')
+    # tempdeck.set_temperature(4)
+    # tempdeck.deactivate()
+    # tempdeck.start_set_temperature(4)
 
     # -----------------------------------------------------
     # Labware
     # -----------------------------------------------------
+    labware_x = robot.load_labware('nest_12_reservoir_15ml', '4', 'reagent reservoir')
+    labware_y = robot.load_labware('nest_12_reservoir_15ml', '5', 'reagent reservoir')
+
     buffer_rack = robot.load_labware('opentrons_6_tuberack_falcon_50ml_conical', '7',
         '6_tuberack_falcon source rack')
 
-    protK_rack = robot.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '9',
+    protK_rack = ctx.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '9',
             'source tuberack ')
     
-    dest_rack = robot.load_labware('nest_96_wellplate_2ml_deep', '8', 'source tuberack ')
+    dest_rack = ctx.load_labware('nest_96_wellplate_2ml_deep', '8', 'source tuberack ')
 
     # -----------------------------------------------------
     # Reagens
     # -----------------------------------------------------
-    lisis_reagent = Reagent(name = 'Lisis',
-                    flow_rate_aspirate = 300,
-                    flow_rate_dispense = 300,
-                    flow_rate_aspirate_mix = 300,
-                    flow_rate_dispense_mix = 300,
-                    delay_aspirate=2,
-                    touch_tip_aspirate_speed=70,
-                    touch_tip_dispense_speed=70)
-                    
-    protK_reagent = Reagent(name = 'Proteinasa K',
+    name_reagent = Reagent(name = 'AVL',
                     flow_rate_aspirate = 600,
                     flow_rate_dispense = 1000,
                     flow_rate_aspirate_mix = 600,
+                    flow_rate_dispense_mix =1000)
+
+    easyMag_reagent = Reagent(name = 'EasyMag',
+                    flow_rate_aspirate = 300,
+                    flow_rate_dispense = 500,
+                    flow_rate_aspirate_mix = 600,
                     flow_rate_dispense_mix = 1000)
+
+    lisis_reagent = Reagent(name = 'Lisis',
+                    flow_rate_aspirate = 300,
+                    flow_rate_dispense = 1,
+                    flow_rate_aspirate_mix = 300,
+                    flow_rate_dispense_mix = 300,
+                    delay_aspirate=3,
+                    touch_tip_dispense_speed=70
 
     # -----------------------------------------------------
     # Tubes
     # -----------------------------------------------------
-    lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 20000,
+    name_tube = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
                 max_volume = 50000,
+                actual_volume = 50000,
                 diameter = 27.81, # avl1.diameter
                 base_type = 2,
-                height_base = 15.6)    
-                
-    lisis_tube2 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 20000,
-                max_volume = 50000,
-                diameter = 27.81, # avl1.diameter
-                base_type = 2,
-                height_base = 15.6)
-                
-    protK_tube = Tube(name = 'Generic 1.5mL safelock snapcap Tubes',
-                actual_volume = 900,
+                height_base = 18)    
+
+    protK_tube = Tube(name = 'Generic opentrons 24 tuberack nest 2ml Tubes',
+                actual_volume = 1900,
                 max_volume = 2000,
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
-                height_base = 4,
-                min_height = 2)    
-    
+                height_base = 4)   
+
+    wash1_tube = Tube(name = 'reservoir 15ml plate',
+                actual_volume = 1250, 
+                max_volume = 1875, # 15000 / 8 => Max reservoir plate / num rows
+                diameter = 8.7, 
+                base_type = 3,
+                height_base = 0)     
+	pool_tube = Tube(name = 'nest_1_reservoir_195ml',
+                actual_volume = 195000, 
+                max_volume = 195000, 
+                diameter = 99.68, 
+                base_type = 3,
+                height_base = 0,
+                min_height = 3,
+                reservoir = True)
+				
+	swim = Tube(name = 'nest_12_reservoir_15ml',
+                actual_volume = 15000, 
+                max_volume = 15000, 
+                diameter = 26.68, 
+                base_type = 3,
+                height_base = 0,
+                reservoir = True)
+				
+	x = elution_dest_rack.columns()[i][0].top().point.x
+	y = 345.65
+	z = 120
+            
+	loc = Location(Point(x, y, z), 'Warning')
+	m20.move_to(location = loc)
+				
+   
     # #####################################################
     # 2. Steps definition
     # #####################################################
@@ -736,114 +790,45 @@ def run(ctx: protocol_api.ProtocolContext):
     # Step n: ....
     # -----------------------------------------------------
     def step1():
-        
-        if not p20.hw_pipette['has_tip']:
-            pick_up(p20,tips20)
-
-        protK = protK_rack['A1']
-
-
-        distribute_custom(pip = p20,
-                        reagent = protK_reagent,
-                        tube_type = protK_tube,
-                        volume = 10,
-                        src = protK,
-                        dest = dest_rack.wells(),
-                        extra_dispensal=0,
-                        disp_height=5,
-                        touch_tip_aspirate=False,
-                        touch_tip_dispense=False)
-
-        drop(p20)
+        robot.comment('1')
+        p1000.pick()
+        p1000.drop()
 
     # -----------------------------------------------------
     # Step n: ....
     # -----------------------------------------------------
     def step2():
-        
-        if not p1000.hw_pipette['has_tip']:
-            pick_up(p1000,tips1000)
+        robot.comment('2')
 
-        lisis = buffer_rack['A3']
-
-        dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl]
-        
-        list_dest = list(divide_destinations(dest_wells,24))
-
-        #for dest in list_dest:
-            # transfer buffer to tubes
-        
-        for dest in list_dest:
-
-            custom_mix(pip = p1000,
-                            reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 750,
-                            location=lisis,
-                            mix_height=10,
-                            source_height=10)   
-
-            distribute_custom(pip = p1000,
-                            reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
-                            volume = 550,
-                            src = lisis,
-                            dest = dest,
-                            extra_dispensal=0,
-                            disp_height=20,
-                            touch_tip_aspirate=True,
-                            touch_tip_dispense=True)
-            
-            
-                        
-        drop(p1000)
-        
     # -----------------------------------------------------
     # Step n: ....
     # -----------------------------------------------------
     def step3():
-        
-        if not p1000.hw_pipette['has_tip']:
-            pick_up(p1000,tips1000)
+        robot.comment('3')
+        m300.pick()
+        m300.drop()
 
-        lisis = buffer_rack['B3']
-        
-        # transfer buffer to tubes
-        dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
-        
-        list_dest = list(divide_destinations(dest_wells,24))
+    # -----------------------------------------------------
+    # Step n: ....
+    # -----------------------------------------------------
+    def step4():
+        robot.comment('4')
 
-        for dest in list_dest:
-        # transfer buffer to tubes
+    # -----------------------------------------------------
+    # Step n: ....
+    # -----------------------------------------------------
+    def step5():        
+        robot.comment('5')
 
-            custom_mix(pip = p1000,
-                    reagent = lisis_reagent,
-                    repetitions=2,
-                    volume = 750,
-                    location=lisis,
-                    mix_height=10,
-                    source_height=10)    
-        
-            distribute_custom(pip = p1000,
-                            reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
-                            volume = 550,
-                            src = lisis,
-                            dest = dest,
-                            extra_dispensal=0,
-                            disp_height=20,
-                            touch_tip_aspirate=True,
-                            touch_tip_dispense=True)            
-                        
-        drop(p1000)
-    
     # -----------------------------------------------------
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Proteinasa K'},
-        2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 6 columns'},
-        3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis last 6 columns'}
+        1:{'Execute': True,  'Function': step1, 'Description': 'Mix beads'},
+        2:{'Execute': False, 'Function': step2, 'Description': 'Transfer lysis'},
+        3:{'Execute': True,  'Function': step3, 'Description': 'Wait with magnet OFF', 'wait_time': 600}, 
+        4:{'Execute': True,  'Function': step4, 'Description': 'Incubate wait with magnet ON', 'wait_time': 300},
+        5:{'Execute': True,  'Function': step5, 'Description': 'Remove supernatant'}
     }
 
     # #####################################################
@@ -851,7 +836,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # #####################################################
     for step in STEPS:
         run_step(step)
-   
+
     # track final used tip
     save_tip_info()
 
@@ -861,8 +846,6 @@ def run(ctx: protocol_api.ProtocolContext):
     if not robot.is_simulating():
         end = finish_run()
 
-
-
         robot.comment('===============================================')
         robot.comment('Start time:   ' + str(start))
         robot.comment('Finish time:  ' + str(end))
@@ -871,4 +854,3 @@ def run(ctx: protocol_api.ProtocolContext):
             val = tip_log['used'][key]
             robot.comment('Tips "' + str(key) + '" used: ' + str(val))
         robot.comment('===============================================')
-

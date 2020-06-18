@@ -1,5 +1,7 @@
 """ Short description of this Python module.
+
 Longer description of this module.
+
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
@@ -11,8 +13,8 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Jon Sicilia", "Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
-__contact__ = "jsiciliamambrilla@gmail.com"
+__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
 __license__ = "GPLv3"
@@ -38,8 +40,8 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'EZ1 Carrier',
-    'author': 'Jon Sicilia (jsiciliamambrilla@gmail.com)',
+    'protocolName': 'Template',
+    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -51,6 +53,7 @@ metadata = {
 NUM_SAMPLES = 96
 RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
+recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -71,26 +74,46 @@ tip_log['used'] = {}
 ### Formulas info ###
 '''
 Where V : Volumen ; B: Area of base ; h : Height; r : Radius ; d : Diameter; A = Area
+
 ### General ###
+
 V = B * h 
+
 h = V / B
+
 ### Circular Cylinder ###
+
 V = math.pi * r**2 * h
+
 V = math.pi * d**2 * h / 4
+
  
 ### For hemispheres ###
+
 h = r
+
 r = d / 2
+
 V = 2 * math.pi * r**3 / 3
+
 V = math.pi * d**3 / 12
+
 ### For Cones ###
+
 V = math.pi * r**2 * h / 3
+
 h = 3 * V / (math.pi * r**2)
+
 V = math.pi * d**2 * h / 12
+
 h = 12 * V / (math.pi * d**2)
-### Area of a circle ###
+
+### Area of a circle ###
+
 A = math.pi * r**2 
+
 A = math.pi * d**2 / 4
+
 '''
 ### End formulas info ###
 
@@ -113,7 +136,7 @@ class Tube:
     """
     
     def __init__(self, name, max_volume, actual_volume, diameter, 
-                 base_type, height_base):
+                 base_type, height_base, min_height=0.5, reservoir = False):
         """Summary
         
         Args:
@@ -130,6 +153,8 @@ class Tube:
         self._diameter = diameter
         self._base_type = base_type
         self._height_base = height_base
+        self._min_height = min_height
+        self._reservoir = reservoir
 
         if base_type == 1:
             self._volume_base = (math.pi * diameter**3) / 12
@@ -141,6 +166,10 @@ class Tube:
             self._height_base = 0
 
     @property
+    def reservoir(self):
+        return self._reservoir
+    
+    @property
     def actual_volume(self):
         return self._actual_volume
 
@@ -148,15 +177,15 @@ class Tube:
     def actual_volume(self, value):
         self._actual_volume = value
 
-    def calc_height(self, aspirate_volume, min_height=0.5):
+    def calc_height(self, aspirate_volume):
         volume_cylinder = self._actual_volume - self._volume_base
         if volume_cylinder <= aspirate_volume:
-            height = min_height
+            height = self._min_height
         else:
             cross_section_area = (math.pi * self._diameter**2) / 4   
             height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
-            if height < min_height:
-                height = min_height
+            if height < self._min_height:
+                height = self._min_height
 
         return height
 
@@ -364,19 +393,26 @@ resuming.')
     # Optional only to prevente cacelations
     # save_tip_info()
     tip_log['count'][pip] += 1
-    tip_log['used'][pip] += 1
-
-
+    if "8-Channel" not in str(pip):
+        tip_log['used'][pip] += 1
+    else:
+        tip_log['used'][pip] += 8
 def drop(pip):
     global switch
-    if "8-Channel" not in str(pip):
-        side = 1 if switch else -1
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
-        pip.drop_tip(drop_loc,home_after=False)
-        switch = not switch
+    if recycle_tip:
+                                  
+                                                                                    
+        pip.return_tip()
+                           
     else:
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
-        pip.drop_tip(drop_loc,home_after=False)
+        if "8-Channel" not in str(pip):
+            side = 1 if switch else -1
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
+            pip.drop_tip(drop_loc,home_after=False)
+            switch = not switch
+        else:
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+            pip.drop_tip(drop_loc,home_after=False)
 
 # Function definitions
 ## General purposes
@@ -443,7 +479,10 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             for i in range(len(list_dest)):
                 pickup_height = tube_type.calc_height(volume_per_asp)
 
-                tube_type.actual_volume -= (max_trans_per_asp * volume)
+                if tube_type.reservoir:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+                else:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume)
                 
                 pip.aspirate(volume=volume_per_asp, 
                             location=src.bottom(pickup_height),
@@ -484,8 +523,11 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
 
                     pickup_height = tube_type.calc_height(volume_per_asp)
 
-                    tube_type.actual_volume -= vol
-                
+                    if tube_type.reservoir:
+                        tube_type.actual_volume -= (vol * 8)
+                    else:
+                        tube_type.actual_volume -= vol
+
                     pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
@@ -612,7 +654,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
 
     tips300 = [robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
-        for slot in ['10']
+        for slot in ['9']
     ]
 
     # -----------------------------------------------------
@@ -630,12 +672,12 @@ def run(ctx: protocol_api.ProtocolContext):
     # Labware
     # -----------------------------------------------------
 
-    ez1_control_rack = ctx.load_labware('gm_15_tuberack_10000ul', '7',
+    ez1_control_rack = robot.load_labware('gm_15_tuberack_10000ul', '7',
         'gm15 tube rack')
 
     dest_rack = [
-        ctx.load_labware(
-            'opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', slot,
+        robot.load_labware(
+            'opentrons_24_tuberack_nest_2ml_screwcap', slot,
             'source tuberack ' + str(i+1))
         for i, slot in enumerate(['11', '8', '5'])
     ]
@@ -645,9 +687,9 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     carrier_ez1_reagent = Reagent(name = 'Carrier EZ1',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 500,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_dispense_mix = 500)
                     
     # -----------------------------------------------------
     # Tubes
@@ -674,20 +716,40 @@ def run(ctx: protocol_api.ProtocolContext):
 
         carrier_ez1 = ez1_control_rack['A5']
 
+        # list_desp = dest_rack[0].wells()
+        # list_desp.append(dest_rack[1].wells())
+        # list_desp.append(dest_rack[2].wells()[:4])
+
+        list_desp = [dest_rack[0].wells()]
+        list_desp.append(dest_rack[1].wells())
+        list_desp.append(dest_rack[2].wells()[:4])
+
+        for dest in list_desp:
+            distribute_custom(pip = p300,
+                                reagent = carrier_ez1_reagent,
+                                tube_type = redcap_tube,
+                                volume = 60,
+                                src = carrier_ez1,
+                                dest = dest,
+                                extra_dispensal=0,
+                                max_volume=200,
+                                disp_height=20,
+                                touch_tip_aspirate=False,
+                                touch_tip_dispense=True)
 
         # transfer buffer to tubes
-        for rack in dest_rack:
-            distribute_custom(pip = p300,
-                            reagent = carrier_ez1_reagent,
-                            tube_type = redcap_tube,
-                            volume = 60,
-                            src = carrier_ez1,
-                            dest = rack.wells(),
-                            extra_dispensal=0,
-    						max_volume=200,
-                            disp_height=20,
-                            touch_tip_aspirate=False,
-                            touch_tip_dispense=False)
+        # for rack in dest_rack:
+        #     distribute_custom(pip = p300,
+        #                     reagent = carrier_ez1_reagent,
+        #                     tube_type = redcap_tube,
+        #                     volume = 60,
+        #                     src = carrier_ez1,
+        #                     dest = rack.wells(),
+        #                     extra_dispensal=0,
+    				# 		max_volume=200,
+        #                     disp_height=20,
+        #                     touch_tip_aspirate=False,
+        #                     touch_tip_dispense=True)
                         
         drop(p300)
 

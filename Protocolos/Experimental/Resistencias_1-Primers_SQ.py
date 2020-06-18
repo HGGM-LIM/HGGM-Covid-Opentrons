@@ -41,7 +41,7 @@ import csv
 # #####################################################
 metadata = {
     'protocolName': 'Template',
-    'author': 'Alicia Arévalo (aarevalo@hggm.es)',
+    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -50,9 +50,10 @@ metadata = {
 # #####################################################
 # Protocol parameters
 # #####################################################
-NUM_SAMPLES = 96
+NUM_SAMPLES = 8
 RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
+recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -135,7 +136,7 @@ class Tube:
     """
     
     def __init__(self, name, max_volume, actual_volume, diameter, 
-                 base_type, height_base):
+                 base_type, height_base, min_height=0.5, reservoir = False):
         """Summary
         
         Args:
@@ -152,6 +153,8 @@ class Tube:
         self._diameter = diameter
         self._base_type = base_type
         self._height_base = height_base
+        self._min_height = min_height
+        self._reservoir = reservoir
 
         if base_type == 1:
             self._volume_base = (math.pi * diameter**3) / 12
@@ -163,6 +166,10 @@ class Tube:
             self._height_base = 0
 
     @property
+    def reservoir(self):
+        return self._reservoir
+    
+    @property
     def actual_volume(self):
         return self._actual_volume
 
@@ -170,15 +177,15 @@ class Tube:
     def actual_volume(self, value):
         self._actual_volume = value
 
-    def calc_height(self, aspirate_volume, min_height=0.5):
+    def calc_height(self, aspirate_volume):
         volume_cylinder = self._actual_volume - self._volume_base
         if volume_cylinder <= aspirate_volume:
-            height = min_height
+            height = self._min_height
         else:
             cross_section_area = (math.pi * self._diameter**2) / 4   
             height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
-            if height < min_height:
-                height = min_height
+            if height < self._min_height:
+                height = self._min_height
 
         return height
 
@@ -386,19 +393,26 @@ resuming.')
     # Optional only to prevente cacelations
     # save_tip_info()
     tip_log['count'][pip] += 1
-    tip_log['used'][pip] += 1
-
-
+    if "8-Channel" not in str(pip):
+        tip_log['used'][pip] += 1
+    else:
+        tip_log['used'][pip] += 8
 def drop(pip):
     global switch
-    if "8-Channel" not in str(pip):
-        side = 1 if switch else -1
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
-        pip.drop_tip(drop_loc,home_after=False)
-        switch = not switch
+    if recycle_tip:
+                                  
+                                                                                    
+        pip.return_tip()
+                           
     else:
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
-        pip.drop_tip(drop_loc,home_after=False)
+        if "8-Channel" not in str(pip):
+            side = 1 if switch else -1
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
+            pip.drop_tip(drop_loc,home_after=False)
+            switch = not switch
+        else:
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+            pip.drop_tip(drop_loc,home_after=False)
 
 # Function definitions
 ## General purposes
@@ -465,7 +479,10 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             for i in range(len(list_dest)):
                 pickup_height = tube_type.calc_height(volume_per_asp)
 
-                tube_type.actual_volume -= (max_trans_per_asp * volume)
+                if tube_type.reservoir:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+                else:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume)
                 
                 pip.aspirate(volume=volume_per_asp, 
                             location=src.bottom(pickup_height),
@@ -506,8 +523,11 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
 
                     pickup_height = tube_type.calc_height(volume_per_asp)
 
-                    tube_type.actual_volume -= vol
-                
+                    if tube_type.reservoir:
+                        tube_type.actual_volume -= (vol * 8)
+                    else:
+                        tube_type.actual_volume -= vol
+
                     pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
@@ -634,17 +654,17 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
 
     # Primers, 8 tubes Starsted 2ml
-    primers_plate = robot.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '1')
+    primers_plate = robot.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '4')
 
     # Results, 8 x (1 to 8) tubes 0,2 or 0,1 mL 
-    results_plate = robot.load_labware('greiner_96_wellplate_200ul', '2')
+    results_plate = robot.load_labware('greiner_96_wellplate_200ul', '5')
 
     # -----------------------------------------------------
     # Tips
     # -----------------------------------------------------
     tips20 = [
         robot.load_labware('opentrons_96_filtertiprack_20ul', slot)
-        for slot in ['3']
+        for slot in ['6']
     ]
     
     # -----------------------------------------------------
@@ -668,8 +688,9 @@ def run(ctx: protocol_api.ProtocolContext):
     # Tubes
     # -----------------------------------------------------
     primers_tube = Tube(name = 'Primers tube',
-                actual_volume = 576, 
+                actual_volume = 150, 
                 max_volume = 2000, 
+                min_height=0.7,
                 diameter = 8.7, 
                 base_type = 3,
                 height_base = 0)    
@@ -700,6 +721,7 @@ def run(ctx: protocol_api.ProtocolContext):
                 volume = 12,
                 src = source,
                 dest = dest,
+                disp_height=0.2,
                 extra_dispensal = 0,
                 touch_tip_aspirate = False,
                 touch_tip_dispense = False)
