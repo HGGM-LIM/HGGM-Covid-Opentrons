@@ -54,6 +54,7 @@ NUM_SAMPLES = 96
 RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
+photosensitivity = False
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -268,7 +269,7 @@ def check_door():
     else:
         return False
 
-def confirm_door_is_closed(photosensitivity=False):
+def confirm_door_is_closed():
     if not robot.is_simulating():
         #Check if door is opened
         if check_door() == False:
@@ -277,14 +278,14 @@ def confirm_door_is_closed(photosensitivity=False):
             robot.pause()
             notification('close_door')
             time.sleep(5)
-            confirm_door_is_closed(photosensitivity=False)
+            confirm_door_is_closed()
         else:
             if photosensitivity==False:
                 robot._hw_manager.hardware.set_lights(button = True, rails =  True)
             else:
                 robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
-def start_run(photosensitivity=False):
+def start_run():
     notification('start')
     if photosensitivity==False:
         robot._hw_manager.hardware.set_lights(button = True, rails =  True)
@@ -295,7 +296,7 @@ def start_run(photosensitivity=False):
     start_time = now.strftime("%Y/%m/%d %H:%M:%S")
     return start_time
 
-def finish_run(photosensitivity=False):
+def finish_run():
     notification('finish')
     #Set light color to blue
     robot._hw_manager.hardware.set_lights(button = True, rails =  False)
@@ -397,13 +398,11 @@ resuming.')
         tip_log['used'][pip] += 1
     else:
         tip_log['used'][pip] += 8
+
 def drop(pip):
     global switch
-    if recycle_tip:
-								  
-																					
-        pip.return_tip()
-						   
+    if recycle_tip:																					
+        pip.return_tip()	   
     else:
         if "8-Channel" not in str(pip):
             side = 1 if switch else -1
@@ -569,7 +568,7 @@ def run(ctx: protocol_api.ProtocolContext):
         reset_tipcount()
 
     if not robot.is_simulating():
-        start = start_run(photosensitivity=False)
+        start = start_run()
 
 
     # Labware
@@ -772,8 +771,15 @@ def run(ctx: protocol_api.ProtocolContext):
                 base_type = 3,
                 height_base = 0,
                 reservoir = True)
-				
-   
+	
+    x = elution_dest_rack.columns()[i][0].top().point.x
+    y = 345.65
+    z = 120
+            
+    loc = Location(Point(x, y, z), 'Warning')
+    m20.move_to(location = loc)
+
+                			
     # #####################################################
     # 2. Steps definition
     # #####################################################
@@ -836,7 +842,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Stats
     # -----------------------------------------------------
     if not robot.is_simulating():
-        end = finish_run(photosensitivity=False)
+        end = finish_run()
 
         robot.comment('===============================================')
         robot.comment('Start time:   ' + str(start))
