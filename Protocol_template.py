@@ -1,5 +1,4 @@
 """ Short description of this Python module.
-
 Longer description of this module.
 
 This program is free software: you can redistribute it and/or modify it under
@@ -13,7 +12,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__authors__ = ["Alicia Arévalo","Jon Sicilia","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
 __contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
@@ -41,7 +40,7 @@ import csv
 # #####################################################
 metadata = {
     'protocolName': 'Template',
-    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
+    'author': 'Alicia Arévalo (aarevalo@hggm.es)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -119,7 +118,7 @@ A = math.pi * d**2 / 4
 ### End formulas info ###
 
 # #####################################################
-# Common classes
+# Common classes --
 # #####################################################
 class Tube:
 
@@ -385,8 +384,7 @@ def pick_up(pip,tiprack):
     tip_log = retrieve_tip_info(pip,tiprack)
     if tip_log['count'][pip] == tip_log['max'][pip]:
         notification('replace_tipracks')
-        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before \
-resuming.')
+        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before resuming.')
         confirm_door_is_closed()
         pip.reset_tipracks()
         tip_log['count'][pip] = 0

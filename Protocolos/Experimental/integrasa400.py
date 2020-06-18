@@ -12,7 +12,7 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 __authors__ = ["Alicia Arévalo", "Jon Sicilia", "Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
-__contact__ = "aarevalo@hggm.es"
+__contact__ = "jsiciliamambrilla@gmail.com"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
 __license__ = "GPLv3"
@@ -38,8 +38,8 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'Seegene Master Mix',
-    'author': 'Alicia Arévalo (aarevalo@hggm.es)',
+    'protocolName': 'Integrasa/Tropismo 400',
+    'author': 'Jon Sicilia (jsiciliamambrilla@gmail.com)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -526,6 +526,7 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
 
             pip.flow_rate.blow_out = actual_blow_rate
 
+
 # #####################################################
 # Protocol start
 # #####################################################
@@ -627,7 +628,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Tips
     # -----------------------------------------------------
 
-    tips20 = [robot.load_labware('opentrons_96_filtertiprack_20ul', slot)
+    tips300 = [robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
         for slot in ['11']
     ]
 
@@ -635,30 +636,30 @@ def run(ctx: protocol_api.ProtocolContext):
     # Pipettes
     # -----------------------------------------------------
     
-    p20 = robot.load_instrument('p20_single_gen2', 'right', tip_racks=tips20)
+    p300 = robot.load_instrument('p300_single_gen2', 'left', tip_racks=tips300)
 
     ## retrieve tip_log
 
-    retrieve_tip_info(p20,tips20)
+    retrieve_tip_info(p300,tips300)
     
 
     # -----------------------------------------------------
     # Labware
     # -----------------------------------------------------
 
-    positive_control_rack = ctx.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '7',
+    primers_rack = ctx.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '7',
         '24_tuberack_starsted source rack')
 
-    dest_rack = ctx.load_labware('opentrons_96_aluminumblock_biorad_wellplate_200ul', '8', 'source tuberack ')
+    dest_rack = ctx.load_labware('opentrons_96_aluminumblock_generic_pcr_strip_200ul', '8', 'source tuberack')
 
     # -----------------------------------------------------
     # Reagens
     # -----------------------------------------------------
-    positive_control_master_mix = Reagent(name = 'Positive control Master Mix',
-                    flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
-                    flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+    primers_reagent = Reagent(name = 'Primers',
+                    flow_rate_aspirate = 1,
+                    flow_rate_dispense = 300,
+                    flow_rate_aspirate_mix = 1,
+                    flow_rate_dispense_mix = 300)
                     
     # -----------------------------------------------------
     # Tubes
@@ -669,8 +670,8 @@ def run(ctx: protocol_api.ProtocolContext):
                 min_height=0.7,
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
-                height_base = 4) 
-    
+                height_base = 4)    
+                
 
     # #####################################################
     # 2. Steps definition
@@ -681,26 +682,27 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     def step1():
         
-        if not p20.hw_pipette['has_tip']:
-            pick_up(p20,tips20)
+        if not p300.hw_pipette['has_tip']:
+            pick_up(p300,tips300)
 
-        segene_positive_control_mastermix = positive_control_rack['A6']
+        tropismo = primers_rack['A6']
         
-        dest = dest_rack.wells()[:50]
+        dest = dest_rack.wells()[:20]
 
         # transfer buffer to tubes
-        distribute_custom(pip = p20,
-                        reagent = positive_control_master_mix,
+        distribute_custom(pip = p300,
+                        reagent = primers_reagent,
                         tube_type = starsted_tube,
-                        volume = 15,
-                        src = segene_positive_control_mastermix,
+                        volume = 20,
+                        src = tropismo,
                         dest = dest,
                         extra_dispensal=0,
                         disp_height=20,
+						max_volume=200,
                         touch_tip_aspirate=False,
                         touch_tip_dispense=True)
                         
-        drop(p20)
+        drop(p300)
             
     # -----------------------------------------------------
     # Execution plan

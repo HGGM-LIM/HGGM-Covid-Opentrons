@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__authors__ = ["Alicia Arévalo", "Jon Sicilia","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
 __contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
@@ -40,8 +40,8 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'Template',
-    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
+    'protocolName': 'Carrier EZ1',
+    'author': 'Alicia Arévalo (aarevalo@hggm.es)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -54,6 +54,7 @@ NUM_SAMPLES = 96
 RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
+photosensitivity = False
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -118,7 +119,7 @@ A = math.pi * d**2 / 4
 ### End formulas info ###
 
 # #####################################################
-# Common classes
+# Common classes --
 # #####################################################
 class Tube:
 
@@ -268,7 +269,7 @@ def check_door():
     else:
         return False
 
-def confirm_door_is_closed(photosensitivity=False):
+def confirm_door_is_closed():
     if not robot.is_simulating():
         #Check if door is opened
         if check_door() == False:
@@ -277,14 +278,14 @@ def confirm_door_is_closed(photosensitivity=False):
             robot.pause()
             notification('close_door')
             time.sleep(5)
-            confirm_door_is_closed(photosensitivity=False)
+            confirm_door_is_closed()
         else:
             if photosensitivity==False:
                 robot._hw_manager.hardware.set_lights(button = True, rails =  True)
             else:
                 robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
-def start_run(photosensitivity=False):
+def start_run():
     notification('start')
     if photosensitivity==False:
         robot._hw_manager.hardware.set_lights(button = True, rails =  True)
@@ -295,7 +296,7 @@ def start_run(photosensitivity=False):
     start_time = now.strftime("%Y/%m/%d %H:%M:%S")
     return start_time
 
-def finish_run(photosensitivity=False):
+def finish_run():
     notification('finish')
     #Set light color to blue
     robot._hw_manager.hardware.set_lights(button = True, rails =  False)
@@ -384,8 +385,7 @@ def pick_up(pip,tiprack):
     tip_log = retrieve_tip_info(pip,tiprack)
     if tip_log['count'][pip] == tip_log['max'][pip]:
         notification('replace_tipracks')
-        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before \
-resuming.')
+        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before resuming.')
         confirm_door_is_closed()
         pip.reset_tipracks()
         tip_log['count'][pip] = 0
@@ -397,13 +397,11 @@ resuming.')
         tip_log['used'][pip] += 1
     else:
         tip_log['used'][pip] += 8
+
 def drop(pip):
     global switch
-    if recycle_tip:
-                                  
-                                                                                    
-        pip.return_tip()
-                           
+    if recycle_tip:																					
+        pip.return_tip()	   
     else:
         if "8-Channel" not in str(pip):
             side = 1 if switch else -1
@@ -528,7 +526,7 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
                     else:
                         tube_type.actual_volume -= vol
 
-                    pip.aspirate(volume=volume_per_asp, 
+					pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
 
@@ -716,10 +714,6 @@ def run(ctx: protocol_api.ProtocolContext):
 
         carrier_ez1 = ez1_control_rack['A5']
 
-        # list_desp = dest_rack[0].wells()
-        # list_desp.append(dest_rack[1].wells())
-        # list_desp.append(dest_rack[2].wells()[:4])
-
         list_desp = [dest_rack[0].wells()]
         list_desp.append(dest_rack[1].wells())
         list_desp.append(dest_rack[2].wells()[:4])
@@ -736,20 +730,6 @@ def run(ctx: protocol_api.ProtocolContext):
                                 disp_height=20,
                                 touch_tip_aspirate=False,
                                 touch_tip_dispense=True)
-
-        # transfer buffer to tubes
-        # for rack in dest_rack:
-        #     distribute_custom(pip = p300,
-        #                     reagent = carrier_ez1_reagent,
-        #                     tube_type = redcap_tube,
-        #                     volume = 60,
-        #                     src = carrier_ez1,
-        #                     dest = rack.wells(),
-        #                     extra_dispensal=0,
-    				# 		max_volume=200,
-        #                     disp_height=20,
-        #                     touch_tip_aspirate=False,
-        #                     touch_tip_dispense=True)
                         
         drop(p300)
 
