@@ -699,9 +699,9 @@ def run(ctx: protocol_api.ProtocolContext):
                     
     protK_reagent = Reagent(name = 'Proteinasa K',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 300,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_dispense_mix = 300)
 
     # -----------------------------------------------------
     # Tubes
@@ -713,15 +713,9 @@ def run(ctx: protocol_api.ProtocolContext):
                 base_type = 2,
                 height_base = 15.6)    
                 
-    lisis_tube2 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 20000,
-                max_volume = 50000,
-                diameter = 27.81, # avl1.diameter
-                base_type = 2,
-                height_base = 15.6)
                 
     protK_tube = Tube(name = 'Generic 1.5mL safelock snapcap Tubes',
-                actual_volume = 900,
+                actual_volume = 480,
                 max_volume = 2000,
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
@@ -746,13 +740,13 @@ def run(ctx: protocol_api.ProtocolContext):
         distribute_custom(pip = p20,
                         reagent = protK_reagent,
                         tube_type = protK_tube,
-                        volume = 10,
+                        volume = 5,
                         src = protK,
                         dest = dest_rack.wells(),
                         extra_dispensal=0,
                         disp_height=5,
                         touch_tip_aspirate=False,
-                        touch_tip_dispense=False)
+                        touch_tip_dispense=True)
 
         drop(p20)
 
@@ -766,9 +760,9 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['A3']
 
-        dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl]
+        dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,24))
+        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 3 columnas
 
         #for dest in list_dest:
             # transfer buffer to tubes
@@ -778,7 +772,7 @@ def run(ctx: protocol_api.ProtocolContext):
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
                             repetitions=2,
-                            volume = 750,
+                            volume = 200,
                             location=lisis,
                             mix_height=10,
                             source_height=10)   
@@ -786,56 +780,84 @@ def run(ctx: protocol_api.ProtocolContext):
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
                             tube_type = lisis_tube1,
-                            volume = 550,
+                            volume = 280,
                             src = lisis,
                             dest = dest,
                             extra_dispensal=0,
                             disp_height=20,
                             touch_tip_aspirate=True,
-                            touch_tip_dispense=True)
-            
+                            touch_tip_dispense=True)    
             
                         
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl]
+        
+        # list_dest = list(divide_destinations(dest_wells,24))
+
+        # #for dest in list_dest:
+        #     # transfer buffer to tubes
+        
+        # for dest in list_dest:
+
+        #     custom_mix(pip = p1000,
+        #                     reagent = lisis_reagent,
+        #                     repetitions=2,
+        #                     volume = 300,
+        #                     location=lisis,
+        #                     mix_height=10,
+        #                     source_height=10)   
+
+        #     distribute_custom(pip = p1000,
+        #                     reagent = lisis_reagent,
+        #                     tube_type = lisis_tube1,
+        #                     volume = 275,
+        #                     src = lisis,
+        #                     dest = dest,
+        #                     extra_dispensal=0,
+        #                     disp_height=20,
+        #                     touch_tip_aspirate=True,
+        #                     touch_tip_dispense=True)
+        
+
         drop(p1000)
         
     # -----------------------------------------------------
     # Step n: ....
     # -----------------------------------------------------
-    def step3():
+    # def step3():
         
-        if not p1000.hw_pipette['has_tip']:
-            pick_up(p1000,tips1000)
+    #     if not p1000.hw_pipette['has_tip']:
+    #         pick_up(p1000,tips1000)
 
-        lisis = buffer_rack['B3']
+        # lisis = buffer_rack['A3']
         
-        # transfer buffer to tubes
-        dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
+        # # transfer buffer to tubes
+        # dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,24))
+        # list_dest = list(divide_destinations(dest_wells,24))
 
-        for dest in list_dest:
-        # transfer buffer to tubes
+        # for dest in list_dest:
+        # # transfer buffer to tubes
 
-            custom_mix(pip = p1000,
-                    reagent = lisis_reagent,
-                    repetitions=2,
-                    volume = 750,
-                    location=lisis,
-                    mix_height=10,
-                    source_height=10)    
+        #     custom_mix(pip = p1000,
+        #             reagent = lisis_reagent,
+        #             repetitions=2,
+        #             volume = 750,
+        #             location=lisis,
+        #             mix_height=10,
+        #             source_height=10)    
         
-            distribute_custom(pip = p1000,
-                            reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
-                            volume = 550,
-                            src = lisis,
-                            dest = dest,
-                            extra_dispensal=0,
-                            disp_height=20,
-                            touch_tip_aspirate=True,
-                            touch_tip_dispense=True)            
+        #     distribute_custom(pip = p1000,
+        #                     reagent = lisis_reagent,
+        #                     tube_type = lisis_tube1,
+        #                     volume = 550,
+        #                     src = lisis,
+        #                     dest = dest,
+        #                     extra_dispensal=0,
+        #                     disp_height=20,
+        #                     touch_tip_aspirate=True,
+        #                     touch_tip_dispense=True)            
                         
-        drop(p1000)
+        # drop(p1000)
     
     # -----------------------------------------------------
     # Execution plan
@@ -843,7 +865,7 @@ def run(ctx: protocol_api.ProtocolContext):
     STEPS = {
         1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Proteinasa K'},
         2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 6 columns'},
-        3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis last 6 columns'}
+        # 3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis first 6 columns'},
     }
 
     # #####################################################

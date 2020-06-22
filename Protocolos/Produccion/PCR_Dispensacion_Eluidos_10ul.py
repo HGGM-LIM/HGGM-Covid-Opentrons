@@ -1,5 +1,7 @@
 """ Short description of this Python module.
+
 Longer description of this module.
+
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
@@ -11,8 +13,8 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-__authors__ = ["Jon Sicilia", "Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
-__contact__ = "jsiciliamambrilla@gmail.com"
+__authors__ = ["Jon Sicilia","Alicia Arévalo","Luis Torrico", "Alejandro André", "Aitor Gastaminza", "Alex Gasulla", "Sara Monzon" , "Miguel Julian", "Eva González" , "José Luis Villanueva", "Angel Menendez Vazquez", "Nick"]
+__contact__ = "luis.torrico@covidrobots.org"
 __copyright__ = "Copyright 2020, CovidRobots"
 __date__ = "2020/06/01"
 __license__ = "GPLv3"
@@ -23,7 +25,7 @@ __version__ = "1.0.0"
 # Imports
 # #####################################################
 from opentrons import protocol_api
-from opentrons.types import Point
+from opentrons.types import Point, Location
 import time
 import math
 import os
@@ -38,8 +40,8 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'Integrasa/Tropismo',
-    'author': 'Jon Sicilia (jsiciliamambrilla@gmail.com)',
+    'protocolName': 'PCR Dispensación de Eluidos',
+    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -49,8 +51,10 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 96
-RESET_TIPCOUNT = False
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
+recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
+photosensitivity = True
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -71,26 +75,46 @@ tip_log['used'] = {}
 ### Formulas info ###
 '''
 Where V : Volumen ; B: Area of base ; h : Height; r : Radius ; d : Diameter; A = Area
+
 ### General ###
+
 V = B * h 
+
 h = V / B
+
 ### Circular Cylinder ###
+
 V = math.pi * r**2 * h
+
 V = math.pi * d**2 * h / 4
+
  
 ### For hemispheres ###
+
 h = r
+
 r = d / 2
+
 V = 2 * math.pi * r**3 / 3
+
 V = math.pi * d**3 / 12
+
 ### For Cones ###
+
 V = math.pi * r**2 * h / 3
+
 h = 3 * V / (math.pi * r**2)
+
 V = math.pi * d**2 * h / 12
+
 h = 12 * V / (math.pi * d**2)
-### Area of a circle ###
+
+### Area of a circle ###
+
 A = math.pi * r**2 
+
 A = math.pi * d**2 / 4
+
 '''
 ### End formulas info ###
 
@@ -113,7 +137,7 @@ class Tube:
     """
     
     def __init__(self, name, max_volume, actual_volume, diameter, 
-                 base_type, height_base):
+                 base_type, height_base, min_height=0.5, reservoir = False):
         """Summary
         
         Args:
@@ -130,6 +154,8 @@ class Tube:
         self._diameter = diameter
         self._base_type = base_type
         self._height_base = height_base
+        self._min_height = min_height
+        self._reservoir = reservoir
 
         if base_type == 1:
             self._volume_base = (math.pi * diameter**3) / 12
@@ -141,6 +167,10 @@ class Tube:
             self._height_base = 0
 
     @property
+    def reservoir(self):
+        return self._reservoir
+    
+    @property
     def actual_volume(self):
         return self._actual_volume
 
@@ -148,15 +178,15 @@ class Tube:
     def actual_volume(self, value):
         self._actual_volume = value
 
-    def calc_height(self, aspirate_volume, min_height=0.5):
+    def calc_height(self, aspirate_volume):
         volume_cylinder = self._actual_volume - self._volume_base
         if volume_cylinder <= aspirate_volume:
-            height = min_height
+            height = self._min_height
         else:
             cross_section_area = (math.pi * self._diameter**2) / 4   
             height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
-            if height < min_height:
-                height = min_height
+            if height < self._min_height:
+                height = self._min_height
 
         return height
 
@@ -250,12 +280,17 @@ def confirm_door_is_closed():
             time.sleep(5)
             confirm_door_is_closed()
         else:
-            #Set light color to green
-            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            if photosensitivity==False:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            else:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
 def start_run():
     notification('start')
-    robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    if photosensitivity==False:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    else:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  False)
     now = datetime.now()
     # dd/mm/YY H:M:S
     start_time = now.strftime("%Y/%m/%d %H:%M:%S")
@@ -268,11 +303,18 @@ def finish_run():
     now = datetime.now()
     # dd/mm/YY H:M:S
     finish_time = now.strftime("%Y/%m/%d %H:%M:%S")
-    for i in range(3):
-        robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-        time.sleep(0.3)
-        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-        time.sleep(0.3)
+    if photosensitivity==False:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            time.sleep(0.3)
+    else:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+            time.sleep(0.3)
     return finish_time
 
 def reset_tipcount(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
@@ -352,19 +394,24 @@ resuming.')
     # Optional only to prevente cacelations
     # save_tip_info()
     tip_log['count'][pip] += 1
-    tip_log['used'][pip] += 1
-
+    if "8-Channel" not in str(pip):
+        tip_log['used'][pip] += 1
+    else:
+        tip_log['used'][pip] += 8
 
 def drop(pip):
     global switch
-    if "8-Channel" not in str(pip):
-        side = 1 if switch else -1
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
-        pip.drop_tip(drop_loc,home_after=False)
-        switch = not switch
+    if recycle_tip:                       
+        pip.return_tip()
     else:
-        drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
-        pip.drop_tip(drop_loc,home_after=False)
+        if "8-Channel" not in str(pip):
+            side = 1 if switch else -1
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
+            pip.drop_tip(drop_loc,home_after=False)
+            switch = not switch
+        else:
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+            pip.drop_tip(drop_loc,home_after=False)
 
 # Function definitions
 ## General purposes
@@ -431,7 +478,10 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             for i in range(len(list_dest)):
                 pickup_height = tube_type.calc_height(volume_per_asp)
 
-                tube_type.actual_volume -= (max_trans_per_asp * volume)
+                if tube_type.reservoir:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+                else:
+                    tube_type.actual_volume -= (max_trans_per_asp * volume)
                 
                 pip.aspirate(volume=volume_per_asp, 
                             location=src.bottom(pickup_height),
@@ -472,8 +522,11 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
 
                     pickup_height = tube_type.calc_height(volume_per_asp)
 
-                    tube_type.actual_volume -= vol
-                
+                    if tube_type.reservoir:
+                        tube_type.actual_volume -= (vol * 8)
+                    else:
+                        tube_type.actual_volume -= vol
+
                     pip.aspirate(volume=volume_per_asp, 
                                 location=src.bottom(pickup_height),
                                 rate=reagent.flow_rate_aspirate)
@@ -516,10 +569,11 @@ def run(ctx: protocol_api.ProtocolContext):
 
 
     # confirm door is close
-    robot.comment(f"Please, close the door")
-    confirm_door_is_closed()
+    if not robot.is_simulating():
+        robot.comment(f"Please, close the door")
+        confirm_door_is_closed()
 
-    start = start_run()
+        start = start_run()
 
 
     # #####################################################
@@ -598,51 +652,58 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Tips
     # -----------------------------------------------------
-
-    tips300 = [robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
-        for slot in ['11']
+    tips20 = [robot.load_labware('opentrons_96_filtertiprack_20ul', slot)
+        for slot in ['6']
     ]
-
+    
     # -----------------------------------------------------
     # Pipettes
     # -----------------------------------------------------
-    
-    p300 = robot.load_instrument('p300_single_gen2', 'left', tip_racks=tips300)
+    m20 = robot.load_instrument('p20_multi_gen2', 'left', tip_racks=tips20)
 
     ## retrieve tip_log
+    retrieve_tip_info(m20,tips20) 
 
-    retrieve_tip_info(p300,tips300)
-    
+    # -----------------------------------------------------
+    # Temperature module + labware
+    # -----------------------------------------------------
+    tempdeck = robot.load_module('tempdeck', '7')
+    templab = tempdeck.load_labware('gm_alum_96_wellplate_100ul', 'Placa PCR')
+    tempdeck.set_temperature(8)
 
     # -----------------------------------------------------
     # Labware
     # -----------------------------------------------------
+    pcr_elution_buffer_rack = robot.load_labware('thermofishermicroplate_96_wellplate_320ul','1',
+        'Placa Eluidos')
 
-    primers_rack = ctx.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '7',
-        '24_tuberack_starsted source rack')
-
-    dest_rack = ctx.load_labware('opentrons_96_aluminumblock_generic_pcr_strip_200ul', '8', 'source tuberack')
-
+    elution_dest_rack = templab
+            
     # -----------------------------------------------------
     # Reagens
     # -----------------------------------------------------
-    primers_reagent = Reagent(name = 'Primers',
-                    flow_rate_aspirate = 1,
-                    flow_rate_dispense = 300,
-                    flow_rate_aspirate_mix = 1,
-                    flow_rate_dispense_mix = 300)
-                    
+    # -----------------------------------------------------
+    # Reagens
+    # -----------------------------------------------------
+    pcr_reagent = Reagent(name = 'PCR Elution',
+                    flow_rate_aspirate = 600,
+                    flow_rate_dispense = 500,
+                    flow_rate_aspirate_mix = 600,
+                    flow_rate_dispense_mix = 500,
+                    touch_tip_dispense_speed=10)
+   
     # -----------------------------------------------------
     # Tubes
     # -----------------------------------------------------
-    starsted_tube = Tube(name = 'Starsted 1.5 Tube',
-                actual_volume = 400,
-                max_volume = 1500,
-                diameter = 8.7, # avl1.diameter
-                base_type = 2,
-                height_base = 4)    
+    pcr_tube = Tube(name = 'micro 2ml plate',
+                actual_volume = 5, 
+                max_volume = 200, 
+                diameter = 8.7, 
+                base_type = 3,
+                height_base = 0,
+                min_height = 0)    
                 
-
+                    
     # #####################################################
     # 2. Steps definition
     # #####################################################
@@ -652,33 +713,52 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     def step1():
         
-        if not p300.hw_pipette['has_tip']:
-            pick_up(p300,tips300)
+        for i in range(len(pcr_elution_buffer_rack.columns())):
 
-        tropismo = primers_rack['A6']
+            if not m20.hw_pipette['has_tip']:
+                pick_up(m20,tips20)
+
+            src_pcr = pcr_elution_buffer_rack.columns()[i][0]
+
+            dest_pcr = [elution_dest_rack.columns()[i][0]]
         
-        dest = dest_rack.wells()[:20]
-
-        # transfer buffer to tubes
-        distribute_custom(pip = p300,
-                        reagent = primers_reagent,
-                        tube_type = starsted_tube,
-                        volume = 20,
-                        src = tropismo,
-                        dest = dest,
+            distribute_custom(pip = m20,
+                        reagent = pcr_reagent,
+                        tube_type = pcr_tube,
+                        volume = 10,
+                        src = src_pcr,
+                        dest = dest_pcr,
+                        max_volume=20,
                         extra_dispensal=0,
-                        disp_height=20,
-						max_volume=200,
                         touch_tip_aspirate=False,
-                        touch_tip_dispense=True)
+                        touch_tip_dispense=False)
                         
-        drop(p300)
+            custom_mix(pip = m20,
+                    reagent = pcr_reagent,
+                    repetitions=2,
+                    volume = 10,
+                    location=elution_dest_rack.columns()[i][0],
+                    mix_height=2.5,
+                    source_height=2.5)  
+                    
+            m20.touch_tip(radius=1.0,v_offset=-5,speed=pcr_reagent.touch_tip_dispense_speed)
+                    
+            pcr_tube.actual_volume = 5
+                        
+            x = elution_dest_rack.columns()[i][0].top().point.x
+            y = 345.65
+            z = 120
             
+            loc = Location(Point(x, y, z), 'Warning')
+            m20.move_to(location = loc)
+            
+            drop(m20)
+    
     # -----------------------------------------------------
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Primers 20 first wells/tubes'},
+        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Elution PCR'}
     }
 
     # #####################################################
@@ -693,15 +773,15 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Stats
     # -----------------------------------------------------
-    end = finish_run()
+    if not robot.is_simulating():
+        end = finish_run()
 
+        robot.comment('===============================================')
+        robot.comment('Start time:   ' + str(start))
+        robot.comment('Finish time:  ' + str(end))
+        robot.comment('Elapsed time: ' + str(datetime.strptime(end, "%Y/%m/%d %H:%M:%S") - datetime.strptime(start, "%Y/%m/%d %H:%M:%S")))
+        for key in tip_log['used']:
+            val = tip_log['used'][key]
+            robot.comment('Tips "' + str(key) + '" used: ' + str(val))
+        robot.comment('===============================================')
 
-
-    robot.comment('===============================================')
-    robot.comment('Start time:   ' + str(start))
-    robot.comment('Finish time:  ' + str(end))
-    robot.comment('Elapsed time: ' + str(datetime.strptime(end, "%Y/%m/%d %H:%M:%S") - datetime.strptime(start, "%Y/%m/%d %H:%M:%S")))
-    for key in tip_log['used']:
-        val = tip_log['used'][key]
-        robot.comment('Tips "' + str(key) + '" used: ' + str(val))
-    robot.comment('===============================================')
