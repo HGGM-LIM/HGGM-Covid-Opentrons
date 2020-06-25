@@ -41,18 +41,19 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'Template',
-    'author': 'Luis Torrico (luis.torrico@covidrobots.org)',
+    'protocolName': 'Nextera DNA Flex NGS Library Prep: Cleanup Libraries',
+    'author': 'Luis Torrico (luis.torrico@covidrobots.org), Alejandro Andre (alejandro.andre@covidrobots.org)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
 }
 
+
 # #####################################################
 # Protocol parameters
 # #####################################################
-NUM_SAMPLES = 96
-RESET_TIPCOUNT = False
+NUM_SAMPLES = 16
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 photosensitivity = False
@@ -76,120 +77,7 @@ aspirate_default_speed = 1
 dispense_default_speed = 1
 blow_out_default_speed = 1
 
-### Formulas info ###
-'''
-Where V : Volumen ; B: Area of base ; h : Height; r : Radius ; d : Diameter; A = Area
 
-### General ###
-
-V = B * h 
-
-h = V / B
-
-### Circular Cylinder ###
-
-V = math.pi * r**2 * h
-
-V = math.pi * d**2 * h / 4
-
- 
-### For hemispheres ###
-
-h = r
-
-r = d / 2
-
-V = 2 * math.pi * r**3 / 3
-
-V = math.pi * d**3 / 12
-
-### For Cones ###
-
-V = math.pi * r**2 * h / 3
-
-h = 3 * V / (math.pi * r**2)
-
-V = math.pi * d**2 * h / 12
-
-h = 12 * V / (math.pi * d**2)
-
-### Area of a circle ###
-
-A = math.pi * r**2 
-
-A = math.pi * d**2 / 4
-
-'''
-### End formulas info ###
-### Start defautl robot values ###
-'''
-Well Bottom Clearances
-
-Aspirate default: 1mm above the bottom
-
-Dispense default: 1mm above the bottom
-
-p20_single_gen2
-
-Aspirate Default: 3.78 µL/s
-
-Dispense Default: 3.78 µL/s
-
-Blow Out Default: 3.78 µL/s
-
-Minimum Volume: 1 µL
-
-Maximum Volume: 20 µL
-
-p300_single_gen2
-
-Aspirate Default: 46.43 µL/s
-
-Dispense Default: 46.43 µL/s
-
-Blow Out Default: 46.43 µL/s
-
-Minimum Volume: 20 µL
-
-Maximum Volume: 300 µL
-
-p1000_single_gen2
-
-Aspirate Default: 137.35 µL/s
-
-Dispense Default: 137.35 µL/s
-
-Blow Out Default: 137.35 µL/s
-
-Minimum Volume: 100 µL
-
-Maximum Volume: 1000 µL
-
-p20_multi_gen2
-
-Aspirate Default: 7.6 µL/s
-
-Dispense Default: 7.6 µL/s
-
-Blow Out Default: 7.6 µL/s
-
-Minimum Volume: 1 µL
-
-Maximum Volume: 20 µL
-
-p300_multi_gen2
-
-Aspirate Default: 94 µL/s
-
-Dispense Default: 94 µL/s
-
-Blow Out Default: 94 µL/s
-
-Minimum Volume: 20 µL
-
-Maximum Volume: 300 µL
-'''
-### Enc defautl robot values ###
 
 # #####################################################
 # Common classes
@@ -582,12 +470,8 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             else:
                 tube_type.actual_volume -= (max_trans_per_asp * volume)
             
-            if len(list_dest[i]) == 1:
-                pip.aspirate(volume=volume, 
-                            location=src.bottom(pickup_height))
-            else:
-                pip.aspirate(volume=volume_per_asp, 
-                            location=src.bottom(pickup_height))
+            pip.aspirate(volume=volume_per_asp, 
+                        location=src.bottom(pickup_height))
 
             robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
             
@@ -758,6 +642,8 @@ def remove_supernatant_and_drop(pip, reagent, tube_type, volume, src,
     drop(pip)
     
     restore_pip_speed(pip=pip)
+    
+    
    
 def aspirate_wit_scrolling(pip, volume, src, 
     start_height = 0, stop_height = 0, x_offset_src = 0):
@@ -776,7 +662,6 @@ def aspirate_wit_scrolling(pip, volume, src,
                 location=s)
 
 
-
 # #####################################################
 # Protocol start
 # #####################################################
@@ -793,6 +678,8 @@ def run(ctx: protocol_api.ProtocolContext):
     if RESET_TIPCOUNT:
         reset_tipcount()
 
+
+    # confirm door is close
     if not robot.is_simulating():
         # confirm door is close
         robot.comment(f"Please, close the door")
@@ -800,13 +687,6 @@ def run(ctx: protocol_api.ProtocolContext):
 
         start = start_run()
 
-
-    # Labware
-    # Positions are:
-    # 10    11      TRASH
-    # 7     8       9
-    # 4     5       6
-    # 1     2       3
 
     # #####################################################
     # Common functions
@@ -825,15 +705,6 @@ def run(ctx: protocol_api.ProtocolContext):
         # Execute step?
         if STEPS[step]['Execute']:
 
-            # Get start info
-            elapsed = datetime.now()
-            for i, key in enumerate(tip_log['used']):
-                val = tip_log['used'][key]
-                if i == 0: 
-                    cl = val
-                else:
-                    cr = val
-
             # Execute function step
             STEPS[step]['Function']()
 
@@ -842,24 +713,6 @@ def run(ctx: protocol_api.ProtocolContext):
                 robot.comment('===============================================')
                 wait = STEPS[step]['wait_time']
                 robot.delay(seconds = wait)
-
-            # Get end info
-            elapsed = datetime.now() - elapsed
-            for i, key in enumerate(tip_log['used']):
-                val = tip_log['used'][key]
-                if i == 0: 
-                    cl = val - cl
-                else:
-                    cr = val - cr
-            # Stats
-            STEPS[step]['Time:'] = str(elapsed)
-            robot.comment('===============================================')
-            robot.comment('Elapsed time: ' + str(elapsed))
-            for i, key in enumerate(tip_log['used']):
-                if i == 0: 
-                    robot.comment('Tips "' + str(key) + '" used: ' + str(cl))
-                else:
-                    robot.comment('Tips "' + str(key) + '" used: ' + str(cr))
 
         # Dont execute step
         else:
@@ -872,200 +725,451 @@ def run(ctx: protocol_api.ProtocolContext):
     # #####################################################
     # 1. Start defining deck
     # #####################################################
-
+    
+    # Labware
+    # Positions are:
+    # 10    11      TRASH
+    # 7     8       9
+    # 4     5       6
+    # 1     2       3
+    
     # -----------------------------------------------------
     # Tips
     # -----------------------------------------------------
-    tips20 = [
-        robot.load_labware('opentrons_96_filtertiprack_20ul', slot)
-        for slot in ['1', '2', '3', '4']
-    ]
     tips300 = [robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
-        for slot in ['5', '6']
-    ]
-
-    tips1000 = [robot.load_labware('opentrons_96_filtertiprack_1000ul', slot)
-        for slot in ['7']
+        for slot in ['11','10','7','8','9','6','3']
     ]
 
     # -----------------------------------------------------
     # Pipettes
     # -----------------------------------------------------
-    p20 = robot.load_instrument('p20_single_gen2', 'right', tip_racks=tips20)
-
-    p300 = robot.load_instrument('p300_single_gen2', 'left', tip_racks=tips300)
-
-    p1000 = robot.load_instrument('p1000_single_gen2', 'left', tip_racks=tips1000)
-
-    m20 = robot.load_instrument('p20_multi_gen2', 'left', tip_racks=tips20)
-
     m300 = robot.load_instrument('p300_multi_gen2', 'left', tip_racks=tips300)
-
-    ## retrieve tip_log
-    retrieve_tip_info(p1000,tips1000)
-    retrieve_tip_info(m300,tips300)
-
-    if not p1000.hw_pipette['has_tip']:
-        pick_up(p1000)
 
     # -----------------------------------------------------
     # Magnetic module + labware
     # -----------------------------------------------------
-    # magdeck = robot.load_module('magdeck', '10')
-    # maglab = magdeck.load_labware('nest_1_reservoir_195ml', 'nest_1_reservoir_195ml')
-    # magdeck.disengage()
-    # magdeck.engage()
+    magdeck = robot.load_module('Magnetic Module Gen2', '4')
+    magnet_rack = magdeck.load_labware('abgenestorage_96_wellplate_800ul', 'MIDI')
+    magdeck.disengage()
 
     # -----------------------------------------------------
-    # Temperature module + labware
+    # Initial labware
     # -----------------------------------------------------
-    # tempdeck = robot.load_module('tempdeck', '1')
-    # templab = tempdeck.load_labware('nest_12_reservoir_15ml', 'nest_12_reservoir_15ml')
-    # tempdeck.set_temperature(4)
-    # tempdeck.deactivate()
-    # tempdeck.start_set_temperature(4)
-
-    # -----------------------------------------------------
-    # Labware
-    # -----------------------------------------------------
-    labware_x = robot.load_labware('nest_12_reservoir_15ml', '4', 'reagent reservoir')
-    labware_y = robot.load_labware('nest_12_reservoir_15ml', '5', 'reagent reservoir')
-
-    buffer_rack = robot.load_labware('opentrons_6_tuberack_falcon_50ml_conical', '7',
-        '6_tuberack_falcon source rack')
-
-    protK_rack = ctx.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '9',
-            'source tuberack ')
     
-    dest_rack = ctx.load_labware('nest_96_wellplate_2ml_deep', '8', 'source tuberack ')
+    # FPCR plate
+    result_rack = robot.load_labware('gm_alum_96_wellplate_100ul', '1', 'FPCR')
+
+    # Reagents plate
+    reagents_rack = robot.load_labware('nest_12_reservoir_15ml', '5', 'nest_12_reservoir_15ml')
 
     # -----------------------------------------------------
-    # Reagens
+    # Reagents
     # -----------------------------------------------------
-    name_reagent = Reagent(name = 'AVL',
+
+    # SPB
+    spb_reagent = Reagent(name = 'SPB',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 600,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix =1000)
+                    flow_rate_dispense_mix = 600)
 
-    easyMag_reagent = Reagent(name = 'EasyMag',
+    # RSB
+    rsb_reagent = Reagent(name = 'RSB',
                     flow_rate_aspirate = 300,
-                    flow_rate_dispense = 500,
-                    flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
-
-    lisis_reagent = Reagent(name = 'Lisis',
-                    flow_rate_aspirate = 300,
-                    flow_rate_dispense = 1,
+                    flow_rate_dispense = 300,
                     flow_rate_aspirate_mix = 300,
-                    flow_rate_dispense_mix = 300,
-                    delay_aspirate=3,
-                    touch_tip_dispense_speed=70
+                    flow_rate_dispense_mix = 300)
 
+    # Ethanol
+    eth_reagent = Reagent(name = 'Ethanol',
+                    flow_rate_aspirate = 300,
+                    flow_rate_dispense = 150,
+                    flow_rate_aspirate_mix = 300,
+                    flow_rate_dispense_mix = 150)
+
+    # FPCR
+    fpcr_reagent = Reagent(name = 'FPCR',
+                    flow_rate_aspirate = 300,
+                    flow_rate_dispense = 150,
+                    flow_rate_aspirate_mix = 300,
+                    flow_rate_dispense_mix = 150)
+    
+   
+                
     # -----------------------------------------------------
     # Tubes
     # -----------------------------------------------------
-    name_tube = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                max_volume = 50000,
-                actual_volume = 50000,
-                diameter = 27.81, # avl1.diameter
-                base_type = 2,
-                height_base = 18)    
-
-    protK_tube = Tube(name = 'Generic opentrons 24 tuberack nest 2ml Tubes',
-                actual_volume = 1900,
-                max_volume = 2000,
-                diameter = 8.7, # avl1.diameter
-                base_type = 2,
-                height_base = 4)   
-
-    wash1_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 1250, 
-                max_volume = 1875, # 15000 / 8 => Max reservoir plate / num rows
-                diameter = 8.7, 
-                base_type = 3,
-                height_base = 0)     
-				
-    pool_tube = Tube(name = 'nest_1_reservoir_195ml',
-                actual_volume = 195000, 
-                max_volume = 195000, 
-                diameter = 99.68, 
-                base_type = 3,
-                height_base = 0,
-                min_height = 3,
-                reservoir = True)
-                
-    swim = Tube(name = 'nest_12_reservoir_15ml',
-                actual_volume = 15000, 
+   
+    # SPB
+    spb_tube = Tube(name = 'nest_12_reservoir_15ml',
+                actual_volume = 4000, 
                 max_volume = 15000, 
                 diameter = 26.68, 
                 base_type = 3,
                 height_base = 0,
                 reservoir = True)
-                
-    mmix_tube = Tube(name = 'nest_96_wellplate_100ul_pcr_full_skirt',
-                actual_vol = 45, 
-                max_vol = 100, # 15000 / 8 => Max reservoir plate / num rows
-                diameter = 5.34,
+    
+    # RSB
+    rsb_tube = Tube(name = 'nest_12_reservoir_15ml',
+                actual_volume = 3000, 
+                max_volume = 15000, 
+                diameter = 26.68, 
+                base_type = 3,
+                height_base = 0,
+                reservoir = True)
+    
+    # ETHANOL
+    eth_tube = Tube(name = 'reservoir 15ml plate',
+                actual_volume = 10000, 
+                max_volume = 15000, 
+                diameter = 26.68, 
+                base_type = 3,
+                height_base = 0,
+                reservoir = True)
+
+    # FPCR
+    fpcr_tube = Tube(name = 'abgenestorage_96_wellplate_800ul',
+                actual_volume = 30,
+                max_volume = 100, # 15000 / 8 => Max reservoir plate / num rows
+                diameter = 8.7, 
                 base_type = 2,
-                height_base = 14.78)
+                height_base = 4,
+                min_height = 0.1)
                 
-    x = elution_dest_rack.columns()[i][0].top().point.x
-	x = 14.36
-    y = 345.65
-    z = 120
-            
-    loc = Location(Point(x, y, z), 'Warning')
-    m20.move_to(location = loc)
                 
-   
+
+    spb_src = reagents_rack['A1']
+    
+    rsb_src = reagents_rack['A5']   
+    
+    eth_src = reagents_rack.columns()[8:12]
+    
+    
+    c_eth = 0           # Current ethanol channel
+    
+    x_offset_rs = 1.9
+
     # #####################################################
     # 2. Steps definition
     # #####################################################
 
     # -----------------------------------------------------
-    # Step n: ....
+    # Activar el módulo magnético
     # -----------------------------------------------------
-    def step1():
-        robot.comment('1')
-        p1000.pick()
-        p1000.drop()
+    def magnet_on():
+        magdeck.engage(height = 10.5)
 
     # -----------------------------------------------------
-    # Step n: ....
+    # Desactivar el módulo magnético
     # -----------------------------------------------------
-    def step2():
-        robot.comment('2')
+    def magnet_off():
+        magdeck.disengage()
+        
+    # -----------------------------------------------------
+    # Void
+    # -----------------------------------------------------
+    def wait():
+        pass
+       
+    # -----------------------------------------------------
+    # Pause to empty trash
+    # -----------------------------------------------------
+    def trash():
+        x = 14.36
+        y = 345.65
+        z = 180
+        loc = Location(Point(x, y, z), 'Warning')
+        m300.move_to(location = loc)
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            time.sleep(0.3)
+        robot.pause('Vaciar cubeta de puntas')
+                
+    # -----------------------------------------------------
+    # Transfer SPB and mix
+    # -----------------------------------------------------
+    def xfer_and_mix_spb():
+    
+        # New tips
+        if not m300.hw_pipette['has_tip']:
+            pick_up(m300, tips300)
+            
+        custom_mix(pip = m300,
+                reagent = spb_reagent,
+                repetitions = 5,
+                volume = 199,
+                location = spb_src,
+                mix_height = 3,
+                source_height = 3)
+     
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+        
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+        
+            custom_mix(pip = m300,
+                reagent = spb_reagent,
+                repetitions = 1,
+                volume = 199,
+                location = spb_src,
+                mix_height = 3,
+                source_height = 3)
+            
+            # Destination MIDI plate
+            dest_wells = [magnet_rack.columns()[i][0]]
+
+            # Dispense 81 ul of SPB
+            distribute_custom(pip = m300,
+                        reagent = spb_reagent,
+                        tube_type = spb_tube,
+                        volume = 81,
+                        src = spb_src,
+                        dest = dest_wells,
+                        max_volume = 81,
+                        extra_dispensal = 0,
+                        touch_tip_aspirate = False,
+                        touch_tip_dispense = False)
+
+            # Mix
+            custom_mix(pip = m300,
+                    reagent = spb_reagent,
+                    repetitions = 10,
+                    volume = 70,
+                    location = dest_wells[0],
+                    mix_height = 1,
+                    source_height = 1)
+                    
+            # Discard tips
+            drop(m300)
+
 
     # -----------------------------------------------------
-    # Step n: ....
+    # Discard supernatant
     # -----------------------------------------------------
-    def step3():
-        robot.comment('3')
-        m300.pick()
-        m300.drop()
+    def d_120():
+
+        # Transfer 120 uL of supernatant from TAGP plate to MIDI plate
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+                
+            x_offset_source = find_side(i) * x_offset_rs
+
+            # Source TAGP plate
+            src = magnet_rack.columns()[i][0]
+
+            remove_supernatant_and_drop(pip=m300,
+                        reagent=spb_reagent,
+                        tube_type=fpcr_tube,
+                        volume=110,
+                        src=src,
+                        x_offset_src=x_offset_source)
+          
+    # -----------------------------------------------------
+    # Transfer ethanol
+    # -----------------------------------------------------
+    def xfer_eth():
+
+        nonlocal c_eth
+        
+        # New tips
+        if not m300.hw_pipette['has_tip']:
+            pick_up(m300, tips300)
+            
+        magdeck_height = magnet_rack.columns()[0][0]._depth
+
+        # Dispense Ethanol
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # Destination MIDI plate
+            dest_wells = [magnet_rack.columns()[i][0]]
+
+            # Dispense 200 ul of Ethanol
+            distribute_custom(pip = m300,
+                        reagent = eth_reagent,
+                        tube_type = eth_tube,
+                        volume = 200,
+                        src = eth_src[c_eth][0],
+                        dest = dest_wells,
+                        max_volume = 200,
+                        disp_height=magdeck_height,
+                        extra_dispensal = 0,
+                        touch_tip_aspirate = False,
+                        touch_tip_dispense = False)
+
+            # Ethanol remaining volume
+            if eth_tube.actual_volume < 1600:
+                c_eth += 1
+                eth_tube.actual_volume = 10000
+
+        # Dont discard tips
+        # drop(m300)
 
     # -----------------------------------------------------
-    # Step n: ....
+    # Discard supernatant
     # -----------------------------------------------------
-    def step4():
-        robot.comment('4')
+    def d_200():
+        # Transfer 120 uL of supernatant from TAGP plate to MIDI plate
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+                
+            x_offset_source = find_side(i) * x_offset_rs
+
+            # Source TAGP plate
+            src = magnet_rack.columns()[i][0]
+
+            remove_supernatant_and_drop(pip=m300,
+                        reagent=eth_reagent,
+                        tube_type=fpcr_tube,
+                        volume=200,
+                        src=src,
+                        x_offset_src=x_offset_source)
+                        
+                        
+    # -----------------------------------------------------
+    # Discard supernatant
+    # -----------------------------------------------------
+    def d_225():
+        # Transfer 120 uL of supernatant from TAGP plate to MIDI plate
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+                
+            x_offset_source = find_side(i) * x_offset_rs
+
+            # Source TAGP plate
+            src = magnet_rack.columns()[i][0]
+
+            remove_supernatant_and_drop(pip=m300,
+                        reagent=eth_reagent,
+                        tube_type=fpcr_tube,
+                        volume=225,
+                        src=src,
+						max_volume=200,
+                        x_offset_src=x_offset_source)
+
 
     # -----------------------------------------------------
-    # Step n: ....
+    # Transfer RSB
     # -----------------------------------------------------
-    def step5():        
-        robot.comment('5')
+    def xfer_rsb():
+    
+        magdeck_height = magnet_rack.columns()[0][0]._depth
+    
+        # New tips
+        if not m300.hw_pipette['has_tip']:
+            pick_up(m300, tips300)
 
+        # Destination MIDI plate
+        dest_wells = [pl[0] for pl in magnet_rack.columns()]
+        
+        # Dispense 81 ul of SPB
+        distribute_custom(pip = m300,
+                        reagent = rsb_reagent,
+                        tube_type = rsb_tube,
+                        volume = 32,
+                        src = rsb_src,
+                        dest = dest_wells,
+                        max_volume = 200,
+                        disp_height = magdeck_height,
+                        extra_dispensal = 0,
+                        touch_tip_aspirate = False,
+                        touch_tip_dispense = False)
+
+        # Discard tips
+        # drop(m300)
+
+
+    # -----------------------------------------------------
+    # Mix RSB
+    # -----------------------------------------------------
+    def mix_rsb():
+ 
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+
+            # Destination MIDI plate
+            dest_wells = [magnet_rack.columns()[i][0]]
+
+            # Mix
+            custom_mix(pip = m300,
+                    reagent = rsb_reagent,
+                    repetitions = 5,
+                    volume = 30,
+                    location = dest_wells[0],
+                    mix_height = 1,
+                    source_height = 1)
+
+            # Discard tips
+            drop(m300)    
+
+    # -----------------------------------------------------
+    # Discard supernatant
+    # -----------------------------------------------------
+    def elucion():
+        # Transfer 30 uL of elution from MIDI plate to FPCT plate
+        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+
+            # New tips
+            if not m300.hw_pipette['has_tip']:
+                pick_up(m300, tips300)
+
+            x_offset_source = find_side(i) * x_offset_rs
+
+            # Source TAP plate
+            src = magnet_rack.columns()[i][0]
+
+            # Destination FPCR plate
+            dest = result_rack.columns()[i][0]
+
+            # Transfer
+            remove_supernatant(pip=m300,
+                        reagent=fpcr_reagent,
+                        tube_type=fpcr_tube,
+                        volume=45,
+                        src=src,
+                        dest=dest,
+                        x_offset_src=x_offset_source,
+                        max_volume=200)
+
+            # Drop tip
+            drop(m300)
+        
     # -----------------------------------------------------
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': True,  'Function': step1, 'Description': 'Mix beads'},
-        2:{'Execute': False, 'Function': step2, 'Description': 'Transfer lysis'},
-        3:{'Execute': True,  'Function': step3, 'Description': 'Wait with magnet OFF', 'wait_time': 600}, 
-        4:{'Execute': True,  'Function': step4, 'Description': 'Incubate wait with magnet ON', 'wait_time': 300},
-        5:{'Execute': True,  'Function': step5, 'Description': 'Remove supernatant'}
+        1:{'Execute': True, 'Function': xfer_and_mix_spb,   'Description': 'Transferir 81 µL de SPB a MIDI y mezclar 10 veces'},
+        2:{'Execute': True, 'Function': wait,       'Description': 'Incubar a temperatura ambiente 5 min', 'wait_time': 300},
+        3:{'Execute': True, 'Function': magnet_on,  'Description': 'Activar el módulo magnético 5 min', 'wait_time': 300},
+        4:{'Execute': True, 'Function': d_120,      'Description': 'Desechar 110 µL de sobrenadante'},
+        5:{'Execute': True, 'Function': xfer_eth,   'Description': 'Transferir 200 µL de Etanol a MIDI'},
+        6:{'Execute': True, 'Function': wait,       'Description': 'Esperar 30 seg', 'wait_time': 30},  
+        7:{'Execute': True, 'Function': d_200,      'Description': 'Desechar 200 µL de sobrenadante'},
+        8:{'Execute': True, 'Function': trash,      'Description': 'Desechar 200 µL de sobrenadante'},      
+        9:{'Execute': True, 'Function': xfer_eth,   'Description': 'Transferir 200 µL de Etanol a MIDI'},
+        10:{'Execute': True, 'Function': wait,       'Description': 'Esperar 30 seg', 'wait_time': 30},  
+        11:{'Execute': True, 'Function': d_225,      'Description': 'Desechar 225 µL de sobrenadante'},
+        12:{'Execute': True, 'Function': wait,       'Description': 'Dejar secar 5 min en iman', 'wait_time': 300},
+        13:{'Execute': True, 'Function': xfer_rsb,   'Description': 'Añadir 32 µL de RSB a MIDI'},
+        14:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactivar el módulo magnético'},
+        15:{'Execute': True, 'Function': mix_rsb,    'Description': 'Mezclar RSB (en MIDI) 5 veces  y esperamos 2 min.', 'wait_time': 120},
+        16:{'Execute': True, 'Function': magnet_on,  'Description': 'Activar el módulo magnético 2 min', 'wait_time': 120}, 
+        17:{'Execute': True, 'Function': elucion,    'Description': 'Dispensar 30 µL de elución a placa FPCR'},
+        18:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactivar el módulo magnético'},
     }
 
     # #####################################################
@@ -1073,7 +1177,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # #####################################################
     for step in STEPS:
         run_step(step)
-
+   
     # track final used tip
     save_tip_info()
 
@@ -1091,20 +1195,3 @@ def run(ctx: protocol_api.ProtocolContext):
             val = tip_log['used'][key]
             robot.comment('Tips "' + str(key) + '" used: ' + str(val))
         robot.comment('===============================================')
-
-
-	# -----------------------------------------------------
-    # Pause to empty trash
-    # -----------------------------------------------------
-    def trash():
-        x = 14.36
-        y = 345.65
-        z = 180
-        loc = Location(Point(x, y, z), 'Warning')
-        m300.move_to(location = loc)
-        for i in range(3):
-            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-            time.sleep(0.3)
-            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-            time.sleep(0.3)
-        robot.pause('Vaciar cubeta de puntas')

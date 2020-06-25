@@ -45,7 +45,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
 	### 9
     tempdeck = protocol.load_module('tempdeck', '6')
-    wellplate_2 = tempdeck.load_labware('thermo_96_wellplate_200ul', 'Placa thermo 96 eluidos')
+    wellplate_2 = tempdeck.load_labware('gm_alum_96_wellplate_100ul', 'Placa thermo 96 eluidos')
 
     ### 4 --> IMAN Y MUESTRAS INICIO
  
