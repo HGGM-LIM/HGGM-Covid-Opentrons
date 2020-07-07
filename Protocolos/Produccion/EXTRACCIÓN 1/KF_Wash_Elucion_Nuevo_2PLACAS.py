@@ -51,7 +51,7 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 96
-RESET_TIPCOUNT = False
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 # End Parameters to adapt the protocol
@@ -923,12 +923,12 @@ def run(ctx: protocol_api.ProtocolContext):
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Proteinasa K PLACA 1'},
-        2:{'Execute': True,  'Function': step4, 'Description': 'Transfer Proteinasa K PLACA 2'},
-        3:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 4 columns PLACA 1'},
-        4:{'Execute': True,  'Function': step5, 'Description': 'Transfer Lisis first 4 columns PLACA 2'},
-        5:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis last 4 columns PLACA 1'},
-        6:{'Execute': True,  'Function': step6, 'Description': 'Transfer Lisis last 4 columns PLACA 2'},
+        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer W1 PLACA 1'},
+        2:{'Execute': True,  'Function': step4, 'Description': 'Transfer W1 PLACA 2'},
+        3:{'Execute': True,  'Function': step2, 'Description': 'Transfer W2 PLACA 1'},
+        4:{'Execute': True,  'Function': step5, 'Description': 'Transfer W2 PLACA 2'},
+        5:{'Execute': True,  'Function': step3, 'Description': 'Transfer ELUCION PLACA 1'},
+        6:{'Execute': True,  'Function': step6, 'Description': 'Transfer ELUCION PLACA 2'},
     }
 
     # #####################################################
