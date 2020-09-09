@@ -40,7 +40,7 @@ import csv
 # Metadata
 # #####################################################
 metadata = {
-    'protocolName': 'KingFisher Lisis Nuevo 3 placas',
+    'protocolName': 'KingFisher Lisis Nuevo 4 placas',
     'author': 'Alicia Arévalo (aarevalo@hggm.es)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
@@ -51,7 +51,7 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 96
-RESET_TIPCOUNT = False
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 photosensitivity = False
@@ -70,7 +70,10 @@ tip_log['count'] = {}
 tip_log['tips'] = {}
 tip_log['max'] = {}
 tip_log['used'] = {}
-
+#pip speed
+aspirate_default_speed = 1
+dispense_default_speed = 1
+blow_out_default_speed = 1
 
 ### Formulas info ###
 '''
@@ -377,6 +380,7 @@ def save_tip_info(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
         with open(file_path, 'a+') as outfile:
             json.dump(data, outfile)
 
+
 def pick_up(pip,tiprack):
     ## retrieve tip_log
     global tip_log
@@ -385,8 +389,7 @@ def pick_up(pip,tiprack):
     tip_log = retrieve_tip_info(pip,tiprack)
     if tip_log['count'][pip] == tip_log['max'][pip]:
         notification('replace_tipracks')
-        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before \
-resuming.')
+        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before resuming.')
         confirm_door_is_closed()
         pip.reset_tipracks()
         tip_log['count'][pip] = 0
@@ -399,10 +402,11 @@ resuming.')
     else:
         tip_log['used'][pip] += 8
 
+
 def drop(pip):
     global switch
-    if recycle_tip:                                                                                 
-        pip.return_tip()       
+    if recycle_tip:
+        pip.return_tip()                           
     else:
         if "8-Channel" not in str(pip):
             side = 1 if switch else -1
@@ -412,6 +416,26 @@ def drop(pip):
         else:
             drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
             pip.drop_tip(drop_loc,home_after=False)
+
+def change_pip_speed(pip, reagent, mix=False):
+    aspirate_default_speed = pip.flow_rate.aspirate
+    dispense_default_speed = pip.flow_rate.dispense
+    blow_out_default_speed = pip.flow_rate.blow_out
+
+    if mix:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate_mix    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense_mix
+    else:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense
+        
+    pip.flow_rate.blow_out = reagent.flow_rate_blow_out
+
+def restore_pip_speed(pip):
+    pip.flow_rate.aspirate = aspirate_default_speed
+    pip.flow_rate.dispense = dispense_default_speed
+    pip.flow_rate.blow_out = blow_out_default_speed
+
 
 # Function definitions
 ## General purposes
@@ -437,118 +461,251 @@ def custom_mix(pip, reagent, repetitions, volume, location, mix_height = 3,
     source_height: height from bottom to aspirate
     mix_height: height from bottom to dispense
     '''
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
+
     if mix_height == 0:
         mix_height = 3
 
     pip.aspirate(volume = 1,
-                 location = location.bottom(z=source_height),
-                 rate = reagent.flow_rate_aspirate_mix)
+                 location = location.bottom(z=source_height))
     for _ in range(repetitions):
         pip.aspirate(volume = volume, 
-                    location = location.bottom(z=source_height), 
-                    rate = reagent.flow_rate_aspirate_mix)
+                    location = location.bottom(z=source_height))
         pip.dispense(volume = volume, 
-                    location = location.bottom(z=mix_height), 
-                    rate=reagent.flow_rate_dispense)
+                    location = location.bottom(z=mix_height))
+
     pip.dispense(volume = 1, 
-        location = location.bottom(z=mix_height), 
-            rate=reagent.flow_rate_dispense)
+                location = location.bottom(z=mix_height))
+
+    restore_pip_speed(pip=pip)
     
 def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
     extra_dispensal=0, disp_height=0, touch_tip_aspirate=False, 
     touch_tip_dispense = False):
 
-        if max_volume == 0:
-            max_volume = pip.max_volume
-        
-        if len(dest) > 1 or max_volume < (volume + extra_dispensal):
-            max_trans_per_asp = (max_volume - extra_dispensal) // volume
-        else:
-            max_trans_per_asp = 1
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
+    
+    if len(dest) > 1 or max_volume < (volume + extra_dispensal):
+        max_trans_per_asp = (max_volume - extra_dispensal) // volume
+    else:
+        max_trans_per_asp = 1
 
-        actual_blow_rate = pip.flow_rate.blow_out
-        pip.flow_rate.blow_out = reagent.flow_rate_blow_out
+    if max_trans_per_asp != 0:
 
-        if max_trans_per_asp != 0:
+        volume_per_asp = (max_trans_per_asp * volume) + extra_dispensal
 
-            volume_per_asp = (max_trans_per_asp * volume) + extra_dispensal
+        list_dest = list(divide_destinations(dest,max_trans_per_asp))
 
-            list_dest = list(divide_destinations(dest,max_trans_per_asp))
+        for i in range(len(list_dest)):
+            pickup_height = tube_type.calc_height(volume_per_asp)
 
-            for i in range(len(list_dest)):
+            if tube_type.reservoir:
+                tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+            else:
+                tube_type.actual_volume -= (max_trans_per_asp * volume)
+            
+            volume_per_asp = (len(list_dest[i]) * volume) + extra_dispensal
+
+            pip.aspirate(volume=volume_per_asp, 
+                        location=src.bottom(pickup_height))
+
+            robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+            
+            if touch_tip_aspirate:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
+            
+            for d in list_dest[i]:
+
+                pip.dispense(volume=volume,
+                            location=d.bottom(disp_height))
+
+                robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
+                
+                if touch_tip_dispense:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
+            
+            if extra_dispensal != 0:
+                pip.blow_out(location=src.top())
+
+    else:
+
+        list_vol_per_well = divide_volume(volume,(max_volume - extra_dispensal))
+
+        list_dest = dest
+
+        for d in list_dest:
+
+            for vol in list_vol_per_well:
+
+                volume_per_asp = vol + extra_dispensal
+
                 pickup_height = tube_type.calc_height(volume_per_asp)
 
                 if tube_type.reservoir:
-                    tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+                    tube_type.actual_volume -= (vol * 8)
                 else:
-                    tube_type.actual_volume -= (max_trans_per_asp * volume)
-                
+                    tube_type.actual_volume -= vol
+
                 pip.aspirate(volume=volume_per_asp, 
-                            location=src.bottom(pickup_height),
-                            rate=reagent.flow_rate_aspirate)
+                            location=src.bottom(pickup_height))
 
                 robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
-                
+            
                 if touch_tip_aspirate:
-                        pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
-                
-                for d in list_dest[i]:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
+            
+                pip.dispense(volume=vol,
+                            location=d.bottom(disp_height),
+                            rate=reagent.flow_rate_dispense)
 
-                    pip.dispense(volume=volume,
-                                location=d.bottom(disp_height),
-                                rate=reagent.flow_rate_dispense)
+                robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
+               
+                if touch_tip_dispense:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
 
-                    robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
-                    
-                    if touch_tip_dispense:
-                        pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
-                
                 if extra_dispensal != 0:
                     pip.blow_out(location=src.top())
 
-            pip.flow_rate.blow_out = actual_blow_rate
+    restore_pip_speed(pip=pip)
 
+
+def find_side(col):
+    if col%2 == 0:
+        side = -1 # left
+    else:
+        side = 1 # right
+    return side
+
+
+def remove_supernatant(pip, reagent, tube_type, volume, src, 
+    dest, x_offset_src, max_volume=0, pickup_height=0.5, x_offset_dest=0, 
+    disp_height=0):
+
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = False)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
+
+    s = src.bottom(pickup_height).move(Point(x = x_offset_src))
+
+    d = dest.bottom(disp_height).move(Point(x = x_offset_dest))
+
+    list_vol_per_round = divide_volume(volume,max_volume)
+
+    for vol in list_vol_per_round:
+
+        #pickup_height = tube_type.calc_height(volume_per_asp)
+
+        if tube_type.reservoir:
+            tube_type.actual_volume -= (vol * 8)
         else:
+            tube_type.actual_volume -= vol
 
-            list_vol_per_well = divide_volume(volume,(max_volume - extra_dispensal))
+        pip.aspirate(volume=vol, 
+                    location=s)
 
-            list_dest = dest
+        robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+    
+        pip.dispense(volume=vol,
+                    location=d)
 
-            for d in list_dest:
+        pip.blow_out()
 
-                for vol in list_vol_per_well:
+        robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
 
-                    volume_per_asp = vol + extra_dispensal
+    restore_pip_speed(pip=pip)
 
-                    pickup_height = tube_type.calc_height(volume_per_asp)
 
-                    if tube_type.reservoir:
-                        tube_type.actual_volume -= (vol * 8)
-                    else:
-                        tube_type.actual_volume -= vol
+def remove_supernatant_and_drop(pip, reagent, tube_type, volume, src, 
+    x_offset_src, max_volume=0, pickup_height=0.5):
 
-                    pip.aspirate(volume=volume_per_asp, 
-                                location=src.bottom(pickup_height),
-                                rate=reagent.flow_rate_aspirate)
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = False)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
 
-                    robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
-                
-                    if touch_tip_aspirate:
-                        pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
-                
-                    pip.dispense(volume=vol,
-                                location=d.bottom(disp_height),
-                                rate=reagent.flow_rate_dispense)
+    s = src.bottom(pickup_height).move(Point(x = x_offset_src))
+    
+    drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+    
+    list_vol_per_round = divide_volume(volume,max_volume)
+    
+    if len(list_vol_per_round) != 1:
 
-                    robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
-                   
-                    if touch_tip_dispense:
-                        pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
+        for i, vol in enumerate(list_vol_per_round):
 
-                    if extra_dispensal != 0:
-                        pip.blow_out(location=src.top())
+            if i != 0:
+                pip.dispense(volume=pip.min_volume, 
+                        location=src.top())                
 
-            pip.flow_rate.blow_out = actual_blow_rate
+            if tube_type.reservoir:
+                tube_type.actual_volume -= (vol * 8)
+            else:
+                tube_type.actual_volume -= vol
+
+            pip.aspirate(volume=vol, 
+                        location=s)
+
+            robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+        
+            pip.dispense(volume=vol,
+                        location=drop_loc)
+
+            pip.blow_out()
+
+            pip.aspirate(volume=pip.min_volume, 
+                        location=drop_loc)
+    else:
+    
+        if tube_type.reservoir:
+            tube_type.actual_volume -= (volume * 8)
+        else:
+            tube_type.actual_volume -= volume
+
+        pip.aspirate(volume=volume, 
+                    location=s)
+
+        robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+        
+    drop(pip)
+    
+    restore_pip_speed(pip=pip)
+   
+def aspirate_wit_scrolling(pip, volume, src, 
+    start_height = 0, stop_height = 0, x_offset_src = 0):
+
+    start_point = src._depth if start_height == 0 else start_height
+
+    stop_point = 0.0 if stop_height == 0 else stop_height
+
+    max_asp = volume/pip.min_volume
+
+    inc_step = (start_point - stop_point) / max_asp
+
+    for h in reversed(np.arange(stop_point, start_point, inc_step)):
+        s = src.bottom(h).move(Point(x = x_offset_src))
+        pip.aspirate(volume=pip.min_volume, 
+                location=s)
+
 
 
 # #####################################################
@@ -711,13 +868,29 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Tubes
     # -----------------------------------------------------
-    lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 19000,
+    lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes', 
+                actual_volume = 22000,
                 max_volume = 50000,
                 diameter = 27.81, # avl1.diameter
                 base_type = 2,
                 height_base = 15.6,
-                min_height = 2)     
+                min_height = 2)
+
+    lisis_tube2 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes', 
+                actual_volume = 22000,
+                max_volume = 50000,
+                diameter = 27.81, # avl1.diameter
+                base_type = 2,
+                height_base = 15.6,
+                min_height = 2) 
+
+    lisis_tube3 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes', 
+                actual_volume = 22000,
+                max_volume = 50000,
+                diameter = 27.81, # avl1.diameter
+                base_type = 2,
+                height_base = 15.6,
+                min_height = 2)   
                 
                 
     protK_tube = Tube(name = 'Generic 1.5mL safelock snapcap Tubes',
@@ -767,17 +940,20 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['A3']
 
-        dest_wells = [well for pl in dest_rack1.columns() for well in pl]
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl] #para media placa
+        dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 6 columnas
+        list_dest = list(divide_destinations(dest_wells,32)) #mezclamos cada 4 columnas
+
+        #for dest in list_dest:
             # transfer buffer to tubes
         
         for dest in list_dest:
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 200,
+                            repetitions=3,
+                            volume = 900,
                             location=lisis,
                             mix_height=10,
                             source_height=10)   
@@ -792,9 +968,7 @@ def run(ctx: protocol_api.ProtocolContext):
                             disp_height=20,
                             touch_tip_aspirate=True,
                             touch_tip_dispense=True)    
-            
-            lisis_tube1.actual_volume=19000
-
+                    
         drop(p1000)
         
     # -----------------------------------------------------
@@ -805,7 +979,7 @@ def run(ctx: protocol_api.ProtocolContext):
         if not p20.hw_pipette['has_tip']:
             pick_up(p20,tips20)
 
-        protK = protK_rack['A2']
+        protK = protK_rack['B1']
 
 
         distribute_custom(pip = p20,
@@ -831,24 +1005,27 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['B3']
 
-        dest_wells = [well for pl in dest_rack2.columns() for well in pl]
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl] #para media placa
+        dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 6 columnas
+        list_dest = list(divide_destinations(dest_wells,32)) #mezclamos cada 4 columnas
+
+        #for dest in list_dest:
             # transfer buffer to tubes
         
         for dest in list_dest:
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 200,
+                            repetitions=3,
+                            volume = 900,
                             location=lisis,
                             mix_height=10,
                             source_height=10)   
 
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
+                            tube_type = lisis_tube2,
                             volume = 280,
                             src = lisis,
                             dest = dest,
@@ -856,9 +1033,7 @@ def run(ctx: protocol_api.ProtocolContext):
                             disp_height=20,
                             touch_tip_aspirate=True,
                             touch_tip_dispense=True)    
-            
-            lisis_tube1.actual_volume=19000
-
+                    
         drop(p1000)
    
     def step5():
@@ -866,7 +1041,7 @@ def run(ctx: protocol_api.ProtocolContext):
         if not p20.hw_pipette['has_tip']:
             pick_up(p20,tips20)
 
-        protK = protK_rack['A3']
+        protK = protK_rack['C1']
 
 
         distribute_custom(pip = p20,
@@ -892,24 +1067,27 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['A2']
 
-        dest_wells = [well for pl in dest_rack3.columns() for well in pl]
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl] #para media placa
+        dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 6 columnas
+        list_dest = list(divide_destinations(dest_wells,32)) #mezclamos cada 4 columnas
+
+        #for dest in list_dest:
             # transfer buffer to tubes
         
         for dest in list_dest:
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 200,
+                            repetitions=3,
+                            volume = 900,
                             location=lisis,
                             mix_height=10,
                             source_height=10)   
 
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
+                            tube_type = lisis_tube3,
                             volume = 280,
                             src = lisis,
                             dest = dest,
@@ -917,9 +1095,7 @@ def run(ctx: protocol_api.ProtocolContext):
                             disp_height=20,
                             touch_tip_aspirate=True,
                             touch_tip_dispense=True)    
-            
-            lisis_tube1.actual_volume=19000
-            
+                    
         drop(p1000)
     
     def step7():
@@ -927,7 +1103,7 @@ def run(ctx: protocol_api.ProtocolContext):
         if not p20.hw_pipette['has_tip']:
             pick_up(p20,tips20)
 
-        protK = protK_rack['A4']
+        protK = protK_rack['D1']
 
 
         distribute_custom(pip = p20,
@@ -953,24 +1129,27 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['B2']
 
-        dest_wells = [well for pl in dest_rack4.columns() for well in pl]
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl] #para media placa
+        dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 6 columnas
+        list_dest = list(divide_destinations(dest_wells,32)) #mezclamos cada 4 columnas
+
+        #for dest in list_dest:
             # transfer buffer to tubes
         
         for dest in list_dest:
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 200,
+                            repetitions=3,
+                            volume = 900,
                             location=lisis,
                             mix_height=10,
                             source_height=10)   
 
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
-                            tube_type = lisis_tube1,
+                            tube_type = lisis_tube4,
                             volume = 280,
                             src = lisis,
                             dest = dest,
@@ -978,7 +1157,7 @@ def run(ctx: protocol_api.ProtocolContext):
                             disp_height=20,
                             touch_tip_aspirate=True,
                             touch_tip_dispense=True)    
-            
+                    
         drop(p1000)
     # -----------------------------------------------------
     # Execution plan

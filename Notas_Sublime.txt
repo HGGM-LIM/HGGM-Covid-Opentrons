@@ -1,8 +1,0 @@
-Notas Sublime Text
-
-""" Short description(?s)(.*)Protocol start
-# Common classes(?s)(.*)Protocol start
-
-
-\\
-

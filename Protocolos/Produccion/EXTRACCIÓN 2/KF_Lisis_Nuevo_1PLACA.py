@@ -51,7 +51,7 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 96
-RESET_TIPCOUNT = False
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 photosensitivity = False
@@ -71,6 +71,10 @@ tip_log['tips'] = {}
 tip_log['max'] = {}
 tip_log['used'] = {}
 
+#pip speed
+aspirate_default_speed = 1
+dispense_default_speed = 1
+blow_out_default_speed = 1
 
 ### Formulas info ###
 '''
@@ -413,6 +417,25 @@ def drop(pip):
             drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
             pip.drop_tip(drop_loc,home_after=False)
 
+def change_pip_speed(pip, reagent, mix=False):
+    aspirate_default_speed = pip.flow_rate.aspirate
+    dispense_default_speed = pip.flow_rate.dispense
+    blow_out_default_speed = pip.flow_rate.blow_out
+
+    if mix:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate_mix    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense_mix
+    else:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense
+        
+    pip.flow_rate.blow_out = reagent.flow_rate_blow_out
+
+def restore_pip_speed(pip):
+    pip.flow_rate.aspirate = aspirate_default_speed
+    pip.flow_rate.dispense = dispense_default_speed
+    pip.flow_rate.blow_out = blow_out_default_speed
+
 # Function definitions
 ## General purposes
 def divide_volume(volume,max_vol):
@@ -437,27 +460,32 @@ def custom_mix(pip, reagent, repetitions, volume, location, mix_height = 3,
     source_height: height from bottom to aspirate
     mix_height: height from bottom to dispense
     '''
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
+
     if mix_height == 0:
         mix_height = 3
 
     pip.aspirate(volume = 1,
-                 location = location.bottom(z=source_height),
-                 rate = reagent.flow_rate_aspirate_mix)
+                 location = location.bottom(z=source_height))
     for _ in range(repetitions):
         pip.aspirate(volume = volume, 
-                    location = location.bottom(z=source_height), 
-                    rate = reagent.flow_rate_aspirate_mix)
+                    location = location.bottom(z=source_height))
         pip.dispense(volume = volume, 
-                    location = location.bottom(z=mix_height), 
-                    rate=reagent.flow_rate_dispense)
+                    location = location.bottom(z=mix_height))
+
     pip.dispense(volume = 1, 
-        location = location.bottom(z=mix_height), 
-            rate=reagent.flow_rate_dispense)
+                location = location.bottom(z=mix_height))
     
 def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
     extra_dispensal=0, disp_height=0, touch_tip_aspirate=False, 
     touch_tip_dispense = False):
 
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
+    
     if max_volume == 0:
         max_volume = pip.max_volume
     
@@ -465,9 +493,6 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
         max_trans_per_asp = (max_volume - extra_dispensal) // volume
     else:
         max_trans_per_asp = 1
-
-    actual_blow_rate = pip.flow_rate.blow_out
-    pip.flow_rate.blow_out = reagent.flow_rate_blow_out
 
     if max_trans_per_asp != 0:
 
@@ -483,30 +508,32 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             else:
                 tube_type.actual_volume -= (max_trans_per_asp * volume)
             
+            volume_per_asp = (len(list_dest[i]) * volume) + extra_dispensal
+
             pip.aspirate(volume=volume_per_asp, 
-                        location=src.bottom(pickup_height),
-                        rate=reagent.flow_rate_aspirate)
+                        location=src.bottom(pickup_height))
 
             robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
             
             if touch_tip_aspirate:
-                    pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
             
             for d in list_dest[i]:
 
                 pip.dispense(volume=volume,
-                            location=d.bottom(disp_height),
-                            rate=reagent.flow_rate_dispense)
+                            location=d.bottom(disp_height))
 
                 robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
                 
                 if touch_tip_dispense:
-                    pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
             
             if extra_dispensal != 0:
                 pip.blow_out(location=src.top())
-
-        pip.flow_rate.blow_out = actual_blow_rate
 
     else:
 
@@ -528,13 +555,14 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
                     tube_type.actual_volume -= vol
 
                 pip.aspirate(volume=volume_per_asp, 
-                            location=src.bottom(pickup_height),
-                            rate=reagent.flow_rate_aspirate)
+                            location=src.bottom(pickup_height))
 
                 robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
             
                 if touch_tip_aspirate:
-                    pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
             
                 pip.dispense(volume=vol,
                             location=d.bottom(disp_height),
@@ -543,12 +571,15 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
                 robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
                
                 if touch_tip_dispense:
-                    pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
 
                 if extra_dispensal != 0:
                     pip.blow_out(location=src.top())
 
-        pip.flow_rate.blow_out = actual_blow_rate
+    restore_pip_speed(pip=pip)
+
 
 
 # #####################################################
@@ -706,15 +737,15 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Tubes
     # -----------------------------------------------------
-    lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes',
-                actual_volume = 19000,
+    lisis_tube1 = Tube(name = 'Falcon 50mL Conical Centrifuge Tubes', 
+                actual_volume = 22000,
                 max_volume = 50000,
                 diameter = 27.81, # avl1.diameter
                 base_type = 2,
                 height_base = 15.6,
-                min_height = 2)   
-            
+                min_height = 2)        
                 
+                   
     protK_tube = Tube(name = 'Generic 1.5mL safelock snapcap Tubes',
                 actual_volume = 480,
                 max_volume = 2000,
@@ -722,7 +753,9 @@ def run(ctx: protocol_api.ProtocolContext):
                 base_type = 2,
                 height_base = 4,
                 min_height = 2)    
-    
+
+ 
+
     # #####################################################
     # 2. Steps definition
     # #####################################################
@@ -761,9 +794,10 @@ def run(ctx: protocol_api.ProtocolContext):
 
         lisis = buffer_rack['A3']
 
+        # dest_wells = [well for pl in dest_rack.columns()[:6] for well in pl] #para media placa
         dest_wells = [well for pl in dest_rack.columns() for well in pl]
         
-        list_dest = list(divide_destinations(dest_wells,48)) #mezclamos cada 3 columnas
+        list_dest = list(divide_destinations(dest_wells,32)) #mezclamos cada 4 columnas
 
         #for dest in list_dest:
             # transfer buffer to tubes
@@ -772,11 +806,11 @@ def run(ctx: protocol_api.ProtocolContext):
 
             custom_mix(pip = p1000,
                             reagent = lisis_reagent,
-                            repetitions=2,
-                            volume = 200,
+                            repetitions=3,
+                            volume = 900,
                             location=lisis,
                             mix_height=10,
-                            source_height=10)
+                            source_height=10)   
 
             distribute_custom(pip = p1000,
                             reagent = lisis_reagent,
@@ -791,52 +825,13 @@ def run(ctx: protocol_api.ProtocolContext):
                     
         drop(p1000)
         
-    # -----------------------------------------------------
-    # Step n: ....
-    # -----------------------------------------------------
-    # def step3():
-        
-    #     if not p1000.hw_pipette['has_tip']:
-    #         pick_up(p1000,tips1000)
 
-        # lisis = buffer_rack['A3']
-        
-        # # transfer buffer to tubes
-        # dest_wells = [well for pl in dest_rack.columns()[6:] for well in pl]
-        
-        # list_dest = list(divide_destinations(dest_wells,24))
-
-        # for dest in list_dest:
-        # # transfer buffer to tubes
-
-        #     custom_mix(pip = p1000,
-        #             reagent = lisis_reagent,
-        #             repetitions=2,
-        #             volume = 750,
-        #             location=lisis,
-        #             mix_height=10,
-        #             source_height=10)    
-        
-        #     distribute_custom(pip = p1000,
-        #                     reagent = lisis_reagent,
-        #                     tube_type = lisis_tube1,
-        #                     volume = 550,
-        #                     src = lisis,
-        #                     dest = dest,
-        #                     extra_dispensal=0,
-        #                     disp_height=20,
-        #                     touch_tip_aspirate=True,
-        #                     touch_tip_dispense=True)            
-                        
-        # drop(p1000)
-    
     # -----------------------------------------------------
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': False,  'Function': step1, 'Description': 'Transfer Proteinasa K'},
-        2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis first 6 columns'},
-        # 3:{'Execute': True,  'Function': step3, 'Description': 'Transfer Lisis first 6 columns'},
+        1:{'Execute': True,  'Function': step1, 'Description': 'Transfer Proteinasa K'},
+        2:{'Execute': True,  'Function': step2, 'Description': 'Transfer Lisis'},
     }
 
     # #####################################################

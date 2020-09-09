@@ -41,7 +41,7 @@ import csv
 # #####################################################
 metadata = {
     'protocolName': 'Resistencias - Dispensar primers de SQ',
-    'author': 'Alejandro Andre (alejandro.andre@covidrobots.org)',
+    'author': 'Alicia Arévalo (aarevalo@hggm.es)',
     'source': 'Hospital Gregorio Marañon',
     'apiLevel': '2.4',
     'description': ''
@@ -718,12 +718,14 @@ def run(ctx: protocol_api.ProtocolContext):
         # Transfer from each NUM_SAMPLES samples tubes to the 8 rows of the result plate
         for i, source in enumerate(samples_plate.wells()[0:NUM_SAMPLES]):
 
+            for dest in enumerate(results_plate.columns()[i][0:7]):
+
             # Pick tip
             if not p20s.hw_pipette['has_tip']:
                 pick_up(p20s, tips20)
 
             # Destination
-            dest = results_plate.columns()[i]
+            dest = 
 
             # Distribute
             distribute_custom(pip = p20s,

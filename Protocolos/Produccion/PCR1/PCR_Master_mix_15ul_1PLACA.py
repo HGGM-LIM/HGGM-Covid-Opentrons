@@ -806,7 +806,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-        1:{'Execute': True,  'Function': step1, 'Description': 'Dispensación de eluidos en placa de PCR'}
+        1:{'Execute': True,  'Function': step1, 'Description': 'Master Mix en placa de PCR'}
     }
 
     # #####################################################

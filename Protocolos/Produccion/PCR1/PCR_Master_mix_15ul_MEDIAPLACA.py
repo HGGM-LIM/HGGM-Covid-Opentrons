@@ -51,7 +51,7 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 96
-RESET_TIPCOUNT = True
+RESET_TIPCOUNT = False
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
 photosensitivity = False
@@ -773,8 +773,8 @@ def run(ctx: protocol_api.ProtocolContext):
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
                 height_base = 4,
-                min_height=0.9)     
-
+                min_height=1)  
+    
     # #####################################################
     # 2. Steps definition
     # #####################################################

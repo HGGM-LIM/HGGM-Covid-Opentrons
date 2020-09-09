@@ -52,7 +52,7 @@ metadata = {
 # #####################################################
 # Protocol parameters
 # #####################################################
-NUM_SAMPLES = 96
+NUM_SAMPLES = 16
 RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = True # Do you want to recycle tips? It shoud only be set True for testing
@@ -439,7 +439,7 @@ def custom_mix(pip, reagent, repetitions, volume, location, mix_height = 3,
                 location = location.bottom(z=mix_height))
 
     restore_pip_speed(pip=pip)
-    
+
 def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
     extra_dispensal=0, disp_height=0, touch_tip_aspirate=False, 
     touch_tip_dispense = False):
@@ -470,6 +470,8 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
             else:
                 tube_type.actual_volume -= (max_trans_per_asp * volume)
             
+            volume_per_asp = (len(list_dest[i]) * volume) + extra_dispensal
+
             pip.aspirate(volume=volume_per_asp, 
                         location=src.bottom(pickup_height))
 
@@ -539,7 +541,7 @@ def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
                     pip.blow_out(location=src.top())
 
     restore_pip_speed(pip=pip)
-
+    
 
 def find_side(col):
     if col%2 == 0:
@@ -608,9 +610,11 @@ def remove_supernatant_and_drop(pip, reagent, tube_type, volume, src,
     
     if len(list_vol_per_round) != 1:
 
-        for vol in list_vol_per_round:
+        for i, vol in enumerate(list_vol_per_round):
 
-            #pickup_height = tube_type.calc_height(volume_per_asp)
+            if i != 0:
+                pip.dispense(volume=pip.min_volume, 
+                        location=src.top())                
 
             if tube_type.reservoir:
                 tube_type.actual_volume -= (vol * 8)
@@ -626,6 +630,9 @@ def remove_supernatant_and_drop(pip, reagent, tube_type, volume, src,
                         location=drop_loc)
 
             pip.blow_out()
+
+            pip.aspirate(volume=pip.min_volume, 
+                        location=drop_loc)
 
     else:
     
@@ -742,10 +749,16 @@ def run(ctx: protocol_api.ProtocolContext):
         for slot in ['11']
     ]
 
-    tips300 = [
-        robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
-        for slot in ['2', '9', '3']
-    ]
+    if recycle_tip == False:
+        tips300 = [
+            robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
+            for slot in ['6', '8', '9']
+        ]
+    else:
+        tips300 = [
+            robot.load_labware('opentrons_96_filtertiprack_200ul', slot)
+            for slot in ['9']
+        ]
     
     # -----------------------------------------------------
     # Pipettes
@@ -760,7 +773,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Magnetic module + labware
     # -----------------------------------------------------
-    magdeck = robot.load_module('Magnetic Module Gen2', '4')
+    magdeck = robot.load_module('Magnetic Module Gen2', '1')
     magnet_rack = magdeck.load_labware('abgenestorage_96_wellplate_800ul')
     #magnet_rack = magdeck.load_labware('nest_96_wellplate_200ul_flat')
     magdeck.disengage()
@@ -768,24 +781,28 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Temperature module + labware
     # -----------------------------------------------------
-    tempdeck = robot.load_module('tempdeck', '6')
+    tempdeck = robot.load_module('Temperature Module Gen2', '3')
     temp_rack = tempdeck.load_labware('gm_alum_96_wellplate_100ul')
+    # Set temperatur to 8º
 
+    #tempdeck.set_temperature(8)
     # -----------------------------------------------------
     # Initial labware
     # -----------------------------------------------------
 
     # Reagents pool
-    reagents_rack = robot.load_labware('nest_12_reservoir_15ml', '5', 'nest_12_reservoir_15ml')
+    reagents_rack = robot.load_labware('nest_12_reservoir_15ml', '2', 'nest_12_reservoir_15ml')
 
     # 2 x 24 eppendorf tubes
     tube_racks = [
-        robot.load_labware('opentrons_24_tuberack_eppendorf_2ml_safelock_snapcap', '7'),
-        robot.load_labware('opentrons_24_tuberack_eppendorf_2ml_safelock_snapcap', '10')
+        robot.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '10'),
+        robot.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '7'),
+        robot.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '4'),
+        robot.load_labware('opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap', '5')
     ]
 
     # Waste pool
-    waste = robot.load_labware('nest_1_reservoir_195ml', '1')
+    #waste = robot.load_labware('nest_1_reservoir_195ml', '1')
 
     # -----------------------------------------------------
     # Reagents and tubes
@@ -794,9 +811,9 @@ def run(ctx: protocol_api.ProtocolContext):
     # Beads
     beads_reagent = Reagent(name = 'Beads',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 600,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_dispense_mix = 600)
 
     # Isopropanol
     isop_reagent = Reagent(name = 'Isopropanol',
@@ -809,31 +826,31 @@ def run(ctx: protocol_api.ProtocolContext):
     # Ethanol
     eth_reagent = Reagent(name = 'Ethanol',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 200,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_dispense_mix = 200)
 
     
     # Elution
     elut_reagent = Reagent(name = 'Elution',
                     flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
+                    flow_rate_dispense = 900,
                     flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_dispense_mix = 900)
 
     # Sample
-    sample_reagent = Reagent(name = 'Elution',
-                    flow_rate_aspirate = 600,
+    sample_reagent = Reagent(name = 'Sample',
+                    flow_rate_aspirate = 1000,
                     flow_rate_dispense = 1000,
-                    flow_rate_aspirate_mix = 600,
+                    flow_rate_aspirate_mix = 1000,
                     flow_rate_dispense_mix = 1000)
 
     # FPCR
     fpcr_reagent = Reagent(name = 'FPCR',
-                    flow_rate_aspirate = 600,
-                    flow_rate_dispense = 1000,
-                    flow_rate_aspirate_mix = 600,
-                    flow_rate_dispense_mix = 1000)
+                    flow_rate_aspirate = 150,
+                    flow_rate_dispense = 900,
+                    flow_rate_aspirate_mix = 150,
+                    flow_rate_dispense_mix = 900)
     
 
     # -----------------------------------------------------
@@ -842,16 +859,17 @@ def run(ctx: protocol_api.ProtocolContext):
    
     # Beads
     beads_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 4000, 
+                actual_volume = 3800, 
                 max_volume = 15000, 
                 diameter = 26.68, 
                 base_type = 3,
                 height_base = 0,
-                reservoir = True)
+                reservoir = True,
+                min_height = 1)
 
     # Isopropanol
     isop_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 12000, 
+                actual_volume = 11000, 
                 max_volume = 15000, 
                 diameter = 26.68, 
                 base_type = 3,
@@ -860,7 +878,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # Ethanol
     eth_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 12000, 
+                actual_volume = 11000, 
                 max_volume = 15000, 
                 diameter = 26.68, 
                 base_type = 3,
@@ -869,7 +887,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # Elution
     elut_tube = Tube(name = 'reservoir 15ml plate',
-                actual_volume = 10000, 
+                actual_volume = 3000, 
                 max_volume = 15000, 
                 diameter = 26.68, 
                 base_type = 3,
@@ -882,17 +900,16 @@ def run(ctx: protocol_api.ProtocolContext):
                 max_volume = 2000,
                 diameter = 8.7, # avl1.diameter
                 base_type = 2,
-                min_height = 0.5,
+                min_height = 1,
                 height_base = 4)  
 
     # FPCR
     fpcr_tube = Tube(name = 'abgenestorage_96_wellplate_800ul',
-                actual_volume = 30,
+                actual_volume = 90,
                 max_volume = 100, # 15000 / 8 => Max reservoir plate / num rows
                 diameter = 8.7, 
                 base_type = 2,
-                height_base = 4,
-                min_height = 0.1)
+                height_base = 4)
 
     
     beads_src = reagents_rack['A1']  
@@ -934,6 +951,11 @@ def run(ctx: protocol_api.ProtocolContext):
     # Pause to empty trash
     # -----------------------------------------------------
     def trash():
+        x = 14.36
+        y = 345.65
+        z = 180
+        loc = Location(Point(x, y, z), 'Warning')
+        m300.move_to(location = loc)
         for i in range(3):
             robot._hw_manager.hardware.set_lights(button = False, rails =  False)
             time.sleep(0.3)
@@ -952,22 +974,27 @@ def run(ctx: protocol_api.ProtocolContext):
         if not m300.hw_pipette['has_tip']:
             pick_up(m300, tips300)
 
-        for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
+        dest_wells = [pl[0] for pl in magnet_rack.columns()[0:NUM_SAMPLES // 8]]
+   
+        custom_mix(pip = m300,
+                reagent = beads_reagent,
+                repetitions = 10,
+                volume = 199,
+                location = beads_src,
+                mix_height = 3,
+                source_height = 3)
 
-            # Destination MIDI plate
-            dest_wells = [magnet_rack.columns()[i][0]]
-
-            # Dispense 81 ul of SPB
-            distribute_custom(pip = m300,
-                        reagent = beads_reagent,
-                        tube_type = beads_tube,
-                        volume = 40,
-                        src = beads_src,
-                        dest = dest_wells,
-                        max_volume = 40,
-                        extra_dispensal = 0,
-                        touch_tip_aspirate = False,
-                        touch_tip_dispense = False)
+        # Dispense 81 ul of SPB
+        distribute_custom(pip = m300,
+                    reagent = beads_reagent,
+                    tube_type = beads_tube,
+                    volume = 40,
+                    src = beads_src,
+                    dest = dest_wells,
+                    max_volume = 200,
+                    extra_dispensal = 0,
+                    touch_tip_aspirate = False,
+                    touch_tip_dispense = True)
 
         # Discard tips
         drop(m300)
@@ -985,6 +1012,8 @@ def run(ctx: protocol_api.ProtocolContext):
         if not m300.hw_pipette['has_tip']:
             pick_up(m300, tips300)
 
+        magdeck_height = magnet_rack.columns()[0][0]._depth
+
         # Dispense Ethanol
         for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
 
@@ -1001,12 +1030,13 @@ def run(ctx: protocol_api.ProtocolContext):
                         max_volume = 200,
                         extra_dispensal = 0,
                         touch_tip_aspirate = False,
-                        touch_tip_dispense = False)
+                        touch_tip_dispense = True,
+                        disp_height=magdeck_height)
 
             # Ethanol remaining volume
-            if isop_tube.actual_volume < 2000:
+            if isop_tube.actual_volume < 1000:
                 c_isop += 1
-                isop_tube.actual_volume = 12000
+                isop_tube.actual_volume = 11000
 
         # Dont discard tips
         drop(m300)
@@ -1019,8 +1049,8 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     def samples():
 
-        # Source tubes
-        source = tube_racks[0].wells() + tube_racks[1].wells()
+        source = [p for r in tube_racks for w in r.rows() for p in w]
+        
 
         # Dispense samples
         for i in range(len(source[0:NUM_SAMPLES])):
@@ -1044,8 +1074,9 @@ def run(ctx: protocol_api.ProtocolContext):
                         dest = dest,
                         max_volume = 250,
                         extra_dispensal = 0,
-                        touch_tip_aspirate = False,
-                        touch_tip_dispense = False)
+                        touch_tip_aspirate = True,
+                        touch_tip_dispense = False,
+                        disp_height = 8)
 
             # Mix
             custom_mix(pip = p1000,
@@ -1053,8 +1084,13 @@ def run(ctx: protocol_api.ProtocolContext):
                     repetitions = 5,
                     volume = 350,
                     location = dest[0],
-                    mix_height = 1,
-                    source_height = 1)
+                    mix_height = 8,
+                    source_height = 8)
+
+            p1000.touch_tip(radius=1.0,
+                           v_offset=-5,
+                           speed=sample_reagent.touch_tip_dispense_speed)
+
 
             # Drop tip
             drop(p1000)
@@ -1062,7 +1098,7 @@ def run(ctx: protocol_api.ProtocolContext):
     # -----------------------------------------------------
     # Discard 500 uL supernatant
     # -----------------------------------------------------
-    def d_500():
+    def d_600():
 
         # Discard 500 uL of supernatant
         for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
@@ -1079,7 +1115,7 @@ def run(ctx: protocol_api.ProtocolContext):
             remove_supernatant_and_drop(pip=m300,
                         reagent=fpcr_reagent,
                         tube_type=fpcr_tube,
-                        volume=500,
+                        volume=600,
                         src=src,
                         x_offset_src=x_offset_source,
                         max_volume=200)
@@ -1121,9 +1157,9 @@ def run(ctx: protocol_api.ProtocolContext):
                         touch_tip_dispense = False)
 
             # Ethanol remaining volume
-            if eth_tube.actual_volume < 4000:
+            if eth_tube.actual_volume < 3000:
                 c_eth += 1
-                eth_tube.actual_volume = 12500
+                eth_tube.actual_volume = 11000
 
         # Dont discard tips
         drop(m300)
@@ -1162,10 +1198,14 @@ def run(ctx: protocol_api.ProtocolContext):
             custom_mix(pip = m300,
                     reagent = elut_reagent,
                     repetitions = 10,
-                    volume = 50,
+                    volume = 80,
                     location = dest_wells[0],
                     mix_height = 1,
                     source_height = 1)
+
+            m300.touch_tip(radius=1.0,
+                           v_offset=-5,
+                           speed=elut_reagent.touch_tip_dispense_speed)
 
             # Dont discard tips
             drop(m300)
@@ -1176,9 +1216,6 @@ def run(ctx: protocol_api.ProtocolContext):
     # Con la p300 multi cogemos 80 del plate y lo llevamos al destino final 
     # -----------------------------------------------------
     def final():
-
-        # Set temperatur to 4º
-        tempdeck.set_temperature(4)
 
         # Dispense elution to final plate
         for i in range(len(magnet_rack.columns()[0:NUM_SAMPLES // 8])):
@@ -1191,19 +1228,20 @@ def run(ctx: protocol_api.ProtocolContext):
             source = magnet_rack.columns()[i][0]
 
             # Destination magnet plate
-            dest = [temp_rack.columns()[i][0]]
+            dest = temp_rack.columns()[i][0]
+
+            x_offset_source = find_side(i) * x_offset_rs
 
             # Transfer
-            distribute_custom(pip = m300,
+            remove_supernatant(pip = m300,
                         reagent = fpcr_reagent,
                         tube_type = fpcr_tube,
-                        volume = 80,
+                        volume = 60,
                         src = source,
                         dest = dest,
                         max_volume = 100,
-                        extra_dispensal = 0,
-                        touch_tip_aspirate = False,
-                        touch_tip_dispense = False)
+                        x_offset_src=x_offset_source,
+                        pickup_height=2)
 
 
             # Dont discard tips
@@ -1215,24 +1253,26 @@ def run(ctx: protocol_api.ProtocolContext):
     # Execution plan
     # -----------------------------------------------------
     STEPS = {
-         1:{'Execute': True, 'Function': beads,      'Description': 'Transferir 40 µL de beads'},
-         2:{'Execute': True, 'Function': isoprop,    'Description': 'Transferir 250 µL de isopropanol'},
+         1:{'Execute': False, 'Function': beads,      'Description': 'Transferir 40 µL de beads'},
+         2:{'Execute': False, 'Function': isoprop,    'Description': 'Transferir 250 µL de isopropanol'},
          3:{'Execute': True, 'Function': samples,    'Description': 'Transferir 250 µL de muestras'},
          4:{'Execute': True, 'Function': trash,      'Description': 'Vaciar cubeta de puntas'},
          5:{'Execute': True, 'Function': wait,       'Description': 'Incubar 5 min', 'wait_time': 300},
          6:{'Execute': True, 'Function': magnet_on,  'Description': 'Activar el módulo magnético', 'wait_time': 240},
-         7:{'Execute': True, 'Function': d_500,      'Description': 'Desechar 500 µL de sobrenadante'},
+         7:{'Execute': True, 'Function': d_600,      'Description': 'Desechar 600 µL de sobrenadante'},
          8:{'Execute': True, 'Function': ethanol,    'Description': 'Transferir 500 µL de ethanol'},
-         9:{'Execute': True, 'Function': d_500,      'Description': 'Desechar 500 µL de sobrenadante'},
-        10:{'Execute': True, 'Function': ethanol,    'Description': 'Transferir 500 µL de ethanol'},
-        11:{'Execute': True, 'Function': d_500,      'Description': 'Desechar 500 µL de sobrenadante'},
-        12:{'Execute': True, 'Function': wait,       'Description': 'Incubar 5 min', 'wait_time': 300},
-        13:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactiva el magnet'},
-        14:{'Execute': True, 'Function': elution,    'Description': 'Transferir 100 µL de elucion y mezclar 10 veces'},
-        15:{'Execute': True, 'Function': wait,       'Description': 'Esperar 30 s', 'wait_time': 30},
-        16:{'Execute': True, 'Function': magnet_on,  'Description': 'Activar el módulo magnético', 'wait_time': 90},
-        17:{'Execute': True, 'Function': final,      'Description': 'Dispensar 80 µL de elución a placa final'},
-        18:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactiva el magnet'},
+         9:{'Execute': True, 'Function': trash,      'Description': 'Vaciar cubeta de puntas'},
+        10:{'Execute': True, 'Function': d_600,      'Description': 'Desechar 600 µL de sobrenadante'},
+        11:{'Execute': True, 'Function': ethanol,    'Description': 'Transferir 500 µL de ethanol'},
+        12:{'Execute': True, 'Function': d_600,      'Description': 'Desechar 600 µL de sobrenadante'},
+        13:{'Execute': True, 'Function': wait,       'Description': 'Incubar 5 min', 'wait_time': 300},
+        14:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactiva el magnet'},
+        15:{'Execute': True, 'Function': elution,    'Description': 'Transferir 100 µL de elucion y mezclar 10 veces'},
+        16:{'Execute': True, 'Function': trash,      'Description': 'Vaciar cubeta de puntas'},
+        17:{'Execute': True, 'Function': wait,       'Description': 'Esperar 30 s', 'wait_time': 30},
+        18:{'Execute': True, 'Function': magnet_on,  'Description': 'Activar el módulo magnético', 'wait_time': 90},
+        19:{'Execute': True, 'Function': final,      'Description': 'Dispensar 80 µL de elución a placa final'},
+        20:{'Execute': True, 'Function': magnet_off, 'Description': 'Desactiva el magnet'},
     }
 
     # #####################################################

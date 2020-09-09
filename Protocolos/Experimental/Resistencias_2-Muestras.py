@@ -50,10 +50,10 @@ metadata = {
 # Protocol parameters
 # #####################################################
 NUM_SAMPLES = 8
-RESET_TIPCOUNT = False
+RESET_TIPCOUNT = True
 PROTOCOL_ID = "GM"
 recycle_tip = False # Do you want to recycle tips? It shoud only be set True for testing
-photosensitivity = False
+photosensitivity = True
 # End Parameters to adapt the protocol
 
 #Defined variables
@@ -69,7 +69,10 @@ tip_log['count'] = {}
 tip_log['tips'] = {}
 tip_log['max'] = {}
 tip_log['used'] = {}
-
+#pip speed
+aspirate_default_speed = 1
+dispense_default_speed = 1
+blow_out_default_speed = 1
 
 ### Formulas info ###
 '''
@@ -118,140 +121,141 @@ A = math.pi * d**2 / 4
 ### End formulas info ###
 
 # #####################################################
-# Common classes --
+# Common classes
 # #####################################################
 class Tube:
 
-	"""Summary
-	
-	Attributes:
-		actual_volume (TYPE): Description
-		base_type (TYPE): Description
-		diameter (TYPE): Description
-		height (TYPE): Description
-		height_base (TYPE): Description
-		max_volume (TYPE): Description
-		name (TYPE): Description
-		volume_base (TYPE): Description
-	"""
-	
-	def __init__(self, name, max_volume, actual_volume, diameter, 
-				 base_type, height_base, min_height=0.5, reservoir = False):
-		"""Summary
-		
-		Args:
-			name (String): Description
-			max_volume (float): Description
-			actual_volume (float): Description
-			diameter (float): Description
-			base_type (integer): 1 => Base type U (Hemisphere), 2 => Base type V (Cone), 3 => Base type flat (|_|)
-			height_base (float): Description
-		"""
-		self._name = name
-		self._max_volume = max_volume
-		self._actual_volume = actual_volume
-		self._diameter = diameter
-		self._base_type = base_type
-		self._height_base = height_base
-		self._min_height = min_height
-		self._reservoir = reservoir
+    """Summary
+    
+    Attributes:
+        actual_volume (TYPE): Description
+        base_type (TYPE): Description
+        diameter (TYPE): Description
+        height (TYPE): Description
+        height_base (TYPE): Description
+        max_volume (TYPE): Description
+        name (TYPE): Description
+        volume_base (TYPE): Description
+    """
+    
+    def __init__(self, name, max_volume, actual_volume, diameter, 
+                 base_type, height_base, min_height=0.5, reservoir = False):
+        """Summary
+        
+        Args:
+            name (String): Description
+            max_volume (float): Description
+            actual_volume (float): Description
+            diameter (float): Description
+            base_type (integer): 1 => Base type U (Hemisphere), 2 => Base type V (Cone), 3 => Base type flat (|_|)
+            height_base (float): Description
+        """
+        self._name = name
+        self._max_volume = max_volume
+        self._actual_volume = actual_volume
+        self._diameter = diameter
+        self._base_type = base_type
+        self._height_base = height_base
+        self._min_height = min_height
+        self._reservoir = reservoir
 
-		if base_type == 1:
-			self._volume_base = (math.pi * diameter**3) / 12
-			self._height_base = diameter / 2
-		elif base_type == 2:
-			self._volume_base = (math.pi * diameter**2 * height_base) / 12
-		else:
-			self._volume_base = 0
-			self._height_base = 0
+        if base_type == 1:
+            self._volume_base = (math.pi * diameter**3) / 12
+            self._height_base = diameter / 2
+        elif base_type == 2:
+            self._volume_base = (math.pi * diameter**2 * height_base) / 12
+        else:
+            self._volume_base = 0
+            self._height_base = 0
 
-	@property
-	def reservoir(self):
-		return self._reservoir
-	
-	@property
-	def actual_volume(self):
-		return self._actual_volume
+    @property
+    def reservoir(self):
+        return self._reservoir
+    
+    @property
+    def actual_volume(self):
+        return self._actual_volume
 
-	@actual_volume.setter
-	def actual_volume(self, value):
-		self._actual_volume = value
+    @actual_volume.setter
+    def actual_volume(self, value):
+        self._actual_volume = value
 
-	def calc_height(self, aspirate_volume):
-		volume_cylinder = self._actual_volume - self._volume_base
-		if volume_cylinder <= aspirate_volume:
-			height = self._min_height
-		else:
-			cross_section_area = (math.pi * self._diameter**2) / 4   
-			height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
-			if height < self._min_height:
-				height = self._min_height
+    def calc_height(self, aspirate_volume):
+        volume_cylinder = self._actual_volume - self._volume_base
+        if volume_cylinder <= aspirate_volume:
+            height = self._min_height
+        else:
+            cross_section_area = (math.pi * self._diameter**2) / 4   
+            height = ((self._actual_volume - aspirate_volume - self._volume_base) / cross_section_area) + self._height_base
+            if height < self._min_height:
+                height = self._min_height
 
-		return height
+        return height
 
 
 class Reagent:
-	def __init__(self, name, flow_rate_aspirate, flow_rate_dispense, 
-		flow_rate_aspirate_mix, flow_rate_dispense_mix, delay_aspirate=0, 
-		delay_dispense = 0, touch_tip_aspirate_speed = 20, 
-		touch_tip_dispense_speed = 20):
-		self._name = name
-		self._flow_rate_aspirate = flow_rate_aspirate
-		self._flow_rate_dispense = flow_rate_dispense
-		self._flow_rate_blow_out = flow_rate_dispense
-		self._flow_rate_aspirate_mix = flow_rate_aspirate_mix
-		self._flow_rate_dispense_mix = flow_rate_dispense_mix
-		self._delay_aspirate = delay_aspirate
-		self._delay_dispense = delay_dispense
-		self._touch_tip_aspirate_speed = touch_tip_aspirate_speed
-		self._touch_tip_dispense_speed = touch_tip_dispense_speed
+    def __init__(self, name, flow_rate_aspirate, flow_rate_dispense, 
+        flow_rate_aspirate_mix, flow_rate_dispense_mix, delay_aspirate=0, 
+        delay_dispense = 0, touch_tip_aspirate_speed = 20, 
+        touch_tip_dispense_speed = 20):
+        self._name = name
+        self._flow_rate_aspirate = flow_rate_aspirate
+        self._flow_rate_dispense = flow_rate_dispense
+        self._flow_rate_blow_out = flow_rate_dispense
+        self._flow_rate_aspirate_mix = flow_rate_aspirate_mix
+        self._flow_rate_dispense_mix = flow_rate_dispense_mix
+        self._delay_aspirate = delay_aspirate
+        self._delay_dispense = delay_dispense
+        self._touch_tip_aspirate_speed = touch_tip_aspirate_speed
+        self._touch_tip_dispense_speed = touch_tip_dispense_speed
 
-	@property
-	def flow_rate_aspirate(self):
-		return self._flow_rate_aspirate
+    @property
+    def flow_rate_aspirate(self):
+        return self._flow_rate_aspirate
 
-	@property
-	def flow_rate_dispense(self):
-		return self._flow_rate_dispense
+    @property
+    def flow_rate_dispense(self):
+        return self._flow_rate_dispense
 
-	@property
-	def flow_rate_blow_out(self):
-		return self._flow_rate_blow_out
+    @property
+    def flow_rate_blow_out(self):
+        return self._flow_rate_blow_out
 
-	@property
-	def flow_rate_aspirate_mix(self):
-		return self._flow_rate_dispense_mix
+    @property
+    def flow_rate_aspirate_mix(self):
+        return self._flow_rate_dispense_mix
 
-	@property
-	def flow_rate_dispense_mix(self):
-		return self._flow_rate_dispense_mix
+    @property
+    def flow_rate_dispense_mix(self):
+        return self._flow_rate_dispense_mix
 
-	@property
-	def delay_aspirate(self):
-		return self._delay_aspirate
+    @property
+    def delay_aspirate(self):
+        return self._delay_aspirate
 
-	@property
-	def delay_dispense(self):
-		return self._delay_dispense
+    @property
+    def delay_dispense(self):
+        return self._delay_dispense
 
-	@property
-	def touch_tip_aspirate_speed(self):
-		return self._touch_tip_aspirate_speed
+    @property
+    def touch_tip_aspirate_speed(self):
+        return self._touch_tip_aspirate_speed
 
-	@property
-	def touch_tip_dispense_speed(self):
-		return self._touch_tip_dispense_speed
-	
-	
-	
+    @property
+    def touch_tip_dispense_speed(self):
+        return self._touch_tip_dispense_speed
+    
+    
+    
 
 # Constants
 TEXT_NOTIFICATIONS_DICT = {
-	'start': f"Started process",
-	'finish': f"Finished process",
-	'close_door': f"Close the door",
-	'replace_tipracks': f"Replace tipracks",
+    'start': f"Started process",
+    'finish': f"Finished process",
+    'close_door': f"Close the door",
+    'replace_tipracks': f"Replace tipracks",
 }
+
 
 
 
@@ -259,294 +263,450 @@ TEXT_NOTIFICATIONS_DICT = {
 # Global functions
 # #####################################################
 def notification(action):
-	if not robot.is_simulating():
-		robot.comment(TEXT_NOTIFICATIONS_DICT[action])
+    if not robot.is_simulating():
+        robot.comment(TEXT_NOTIFICATIONS_DICT[action])
 
 def check_door():
-	if 'CLOSED' in str(robot._hw_manager.hardware.door_state):
-		return True
-	else:
-		return False
+    if 'CLOSED' in str(robot._hw_manager.hardware.door_state):
+        return True
+    else:
+        return False
 
 def confirm_door_is_closed():
-	if not robot.is_simulating():
-		#Check if door is opened
-		if check_door() == False:
-			#Set light color to red and pause
-			robot._hw_manager.hardware.set_lights(button = True, rails =  False)
-			robot.pause()
-			notification('close_door')
-			time.sleep(5)
-			confirm_door_is_closed()
-		else:
-			if photosensitivity==False:
-				robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-			else:
-				robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+    if not robot.is_simulating():
+        #Check if door is opened
+        if check_door() == False:
+            #Set light color to red and pause
+            robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+            robot.pause()
+            notification('close_door')
+            time.sleep(5)
+            confirm_door_is_closed()
+        else:
+            if photosensitivity==False:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            else:
+                robot._hw_manager.hardware.set_lights(button = True, rails =  False)
 
 def start_run():
-	notification('start')
-	if photosensitivity==False:
-		robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-	else:
-		robot._hw_manager.hardware.set_lights(button = True, rails =  False)
-	now = datetime.now()
-	# dd/mm/YY H:M:S
-	start_time = now.strftime("%Y/%m/%d %H:%M:%S")
-	return start_time
+    notification('start')
+    if photosensitivity==False:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+    else:
+        robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+    now = datetime.now()
+    # dd/mm/YY H:M:S
+    start_time = now.strftime("%Y/%m/%d %H:%M:%S")
+    return start_time
 
 def finish_run():
-	notification('finish')
-	#Set light color to blue
-	robot._hw_manager.hardware.set_lights(button = True, rails =  False)
-	now = datetime.now()
-	# dd/mm/YY H:M:S
-	finish_time = now.strftime("%Y/%m/%d %H:%M:%S")
-	if photosensitivity==False:
-		for i in range(3):
-			robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-			time.sleep(0.3)
-			robot._hw_manager.hardware.set_lights(button = True, rails =  True)
-			time.sleep(0.3)
-	else:
-		for i in range(3):
-			robot._hw_manager.hardware.set_lights(button = False, rails =  False)
-			time.sleep(0.3)
-			robot._hw_manager.hardware.set_lights(button = True, rails =  False)
-			time.sleep(0.3)
-	return finish_time
+    notification('finish')
+    #Set light color to blue
+    robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+    now = datetime.now()
+    # dd/mm/YY H:M:S
+    finish_time = now.strftime("%Y/%m/%d %H:%M:%S")
+    if photosensitivity==False:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  True)
+            time.sleep(0.3)
+    else:
+        for i in range(3):
+            robot._hw_manager.hardware.set_lights(button = False, rails =  False)
+            time.sleep(0.3)
+            robot._hw_manager.hardware.set_lights(button = True, rails =  False)
+            time.sleep(0.3)
+    return finish_time
 
 def reset_tipcount(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
-	if os.path.isfile(file_path):
-		os.remove(file_path)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
 
 def retrieve_tip_info(pip,tipracks,file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
-	global tip_log
-	if not tip_log['count'] or pip not in tip_log['count']:
-		tip_log['count'][pip] = 0
-		if not robot.is_simulating():
-			folder_path = os.path.dirname(file_path)
-			if not os.path.isdir(folder_path):
-				os.mkdir(folder_path)
-			if os.path.isfile(file_path):
-				with open(file_path) as json_file:
-					data = json.load(json_file)
-					if "P1000" in str(pip):
-						tip_log['count'][pip] = 0 if not 'tips1000' in data.keys() else data['tips1000']
-					elif 'P300' in str(pip) and 'Single-Channel' in str(pip):
-						tip_log['count'][pip] = 0 if not 'tips300' in data.keys() else data['tips300']
-					elif 'P300' in str(pip) and '8-Channel' in str(pip):
-						tip_log['count'][pip] = 0 if not 'tipsm300' in data.keys() else data['tipsm300']
-					elif 'P20' in str(pip) and 'Single-Channel' in str(pip):
-						tip_log['count'][pip] = 0 if not 'tips20' in data.keys() else data['tips20']
-					elif 'P20' in str(pip) and '8-Channel' in str(pip):
-						tip_log['count'][pip] = 0 if not 'tipsm20' in data.keys() else data['tipsm20']                        
-		if "8-Channel" in str(pip):
-			tip_log['tips'][pip] =  [tip for rack in tipracks for tip in rack.rows()[0]]
-		else:
-			tip_log['tips'][pip] = [tip for rack in tipracks for tip in rack.wells()]
+    global tip_log
+    if not tip_log['count'] or pip not in tip_log['count']:
+        tip_log['count'][pip] = 0
+        if not robot.is_simulating():
+            folder_path = os.path.dirname(file_path)
+            if not os.path.isdir(folder_path):
+                os.mkdir(folder_path)
+            if os.path.isfile(file_path):
+                with open(file_path) as json_file:
+                    data = json.load(json_file)
+                    if "P1000" in str(pip):
+                        tip_log['count'][pip] = 0 if not 'tips1000' in data.keys() else data['tips1000']
+                    elif 'P300' in str(pip) and 'Single-Channel' in str(pip):
+                        tip_log['count'][pip] = 0 if not 'tips300' in data.keys() else data['tips300']
+                    elif 'P300' in str(pip) and '8-Channel' in str(pip):
+                        tip_log['count'][pip] = 0 if not 'tipsm300' in data.keys() else data['tipsm300']
+                    elif 'P20' in str(pip) and 'Single-Channel' in str(pip):
+                        tip_log['count'][pip] = 0 if not 'tips20' in data.keys() else data['tips20']
+                    elif 'P20' in str(pip) and '8-Channel' in str(pip):
+                        tip_log['count'][pip] = 0 if not 'tipsm20' in data.keys() else data['tipsm20']                        
+        if "8-Channel" in str(pip):
+            tip_log['tips'][pip] =  [tip for rack in tipracks for tip in rack.rows()[0]]
+        else:
+            tip_log['tips'][pip] = [tip for rack in tipracks for tip in rack.wells()]
 
-		tip_log['max'][pip] = len(tip_log['tips'][pip])
+        tip_log['max'][pip] = len(tip_log['tips'][pip])
 
-	if not tip_log['used'] or pip not in tip_log['used']:
-		tip_log['used'][pip] = 0
+    if not tip_log['used'] or pip not in tip_log['used']:
+        tip_log['used'][pip] = 0
 
-	return tip_log
+    return tip_log
 
 
 def save_tip_info(file_path = '/data/' + PROTOCOL_ID + '/tip_log.json'):
-	data = {}
-	if not robot.is_simulating():
-		if os.path.isfile(file_path):
-			with open(file_path) as json_file:
-				data = json.load(json_file)
-			os.rename(file_path,file_path + ".bak")
-		for pip in tip_log['count']:
-			if "P1000" in str(pip):
-				data['tips1000'] = tip_log['count'][pip]
-			elif 'P300' in str(pip) and 'Single-Channel' in str(pip):
-				data['tips300'] = tip_log['count'][pip]
-			elif 'P300' in str(pip) and '8-Channel' in str(pip):
-				data['tipsm300'] = tip_log['count'][pip]
-			elif 'P20' in str(pip) and 'Single-Channel' in str(pip):
-				data['tips20'] = tip_log['count'][pip]
-			elif 'P20' in str(pip) and '8-Channel' in str(pip):
-				data['tipsm20'] = tip_log['count'][pip]
+    data = {}
+    if not robot.is_simulating():
+        if os.path.isfile(file_path):
+            with open(file_path) as json_file:
+                data = json.load(json_file)
+            os.rename(file_path,file_path + ".bak")
+        for pip in tip_log['count']:
+            if "P1000" in str(pip):
+                data['tips1000'] = tip_log['count'][pip]
+            elif 'P300' in str(pip) and 'Single-Channel' in str(pip):
+                data['tips300'] = tip_log['count'][pip]
+            elif 'P300' in str(pip) and '8-Channel' in str(pip):
+                data['tipsm300'] = tip_log['count'][pip]
+            elif 'P20' in str(pip) and 'Single-Channel' in str(pip):
+                data['tips20'] = tip_log['count'][pip]
+            elif 'P20' in str(pip) and '8-Channel' in str(pip):
+                data['tipsm20'] = tip_log['count'][pip]
 
-		with open(file_path, 'a+') as outfile:
-			json.dump(data, outfile)
+        with open(file_path, 'a+') as outfile:
+            json.dump(data, outfile)
+
 
 def pick_up(pip,tiprack):
-	## retrieve tip_log
-	global tip_log
-	if not tip_log:
-		tip_log = {}
-	tip_log = retrieve_tip_info(pip,tiprack)
-	if tip_log['count'][pip] == tip_log['max'][pip]:
-		notification('replace_tipracks')
-		robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before resuming.')
-		confirm_door_is_closed()
-		pip.reset_tipracks()
-		tip_log['count'][pip] = 0
-	pip.pick_up_tip(tip_log['tips'][pip][tip_log['count'][pip]])
-	# Optional only to prevente cacelations
-	# save_tip_info()
-	tip_log['count'][pip] += 1
-	if "8-Channel" not in str(pip):
-		tip_log['used'][pip] += 1
-	else:
-		tip_log['used'][pip] += 8
+    ## retrieve tip_log
+    global tip_log
+    if not tip_log:
+        tip_log = {}
+    tip_log = retrieve_tip_info(pip,tiprack)
+    if tip_log['count'][pip] == tip_log['max'][pip]:
+        notification('replace_tipracks')
+        robot.pause('Replace ' + str(pip.max_volume) + 'µl tipracks before \
+resuming.')
+        confirm_door_is_closed()
+        pip.reset_tipracks()
+        tip_log['count'][pip] = 0
+    pip.pick_up_tip(tip_log['tips'][pip][tip_log['count'][pip]])
+    # Optional only to prevente cacelations
+    # save_tip_info()
+    tip_log['count'][pip] += 1
+    if "8-Channel" not in str(pip):
+        tip_log['used'][pip] += 1
+    else:
+        tip_log['used'][pip] += 8
+
 
 def drop(pip):
-	global switch
-	if recycle_tip:																					
-		pip.return_tip()	   
-	else:
-		if "8-Channel" not in str(pip):
-			side = 1 if switch else -1
-			drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
-			pip.drop_tip(drop_loc,home_after=False)
-			switch = not switch
-		else:
-			drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
-			pip.drop_tip(drop_loc,home_after=False)
+    global switch
+    if recycle_tip:
+        pip.return_tip()                           
+    else:
+        if "8-Channel" not in str(pip):
+            side = 1 if switch else -1
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=side*20))
+            pip.drop_tip(drop_loc,home_after=False)
+            switch = not switch
+        else:
+            drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+            pip.drop_tip(drop_loc,home_after=False)
+
+def change_pip_speed(pip, reagent, mix=False):
+    aspirate_default_speed = pip.flow_rate.aspirate
+    dispense_default_speed = pip.flow_rate.dispense
+    blow_out_default_speed = pip.flow_rate.blow_out
+
+    if mix:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate_mix    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense_mix
+    else:
+        pip.flow_rate.aspirate = reagent.flow_rate_aspirate    
+        pip.flow_rate.dispense = reagent.flow_rate_dispense
+        
+    pip.flow_rate.blow_out = reagent.flow_rate_blow_out
+
+def restore_pip_speed(pip):
+    pip.flow_rate.aspirate = aspirate_default_speed
+    pip.flow_rate.dispense = dispense_default_speed
+    pip.flow_rate.blow_out = blow_out_default_speed
+
 
 # Function definitions
 ## General purposes
 def divide_volume(volume,max_vol):
-	num_transfers=math.ceil(volume/max_vol)
-	vol_roundup=math.ceil(volume/num_transfers)
-	last_vol=volume-vol_roundup*(num_transfers-1)
-	vol_list=[vol_roundup for v in range(1,num_transfers)]
-	vol_list.append(last_vol)
-	return vol_list
+    num_transfers=math.ceil(volume/max_vol)
+    vol_roundup=math.ceil(volume/num_transfers)
+    last_vol=volume-vol_roundup*(num_transfers-1)
+    vol_list=[vol_roundup for v in range(1,num_transfers)]
+    vol_list.append(last_vol)
+    return vol_list
 
 def divide_destinations(l, n):
-	# Divide the list of destinations in size n lists.
-	for i in range(0, len(l), n):
-		yield l[i:i + n]
+    # Divide the list of destinations in size n lists.
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 # Function definitions
 ## Expecific for liquids
 def custom_mix(pip, reagent, repetitions, volume, location, mix_height = 3, 
-	source_height = 3):
-	'''
-	Function for mixing a given volume in the same location a x number of repetitions.
-	source_height: height from bottom to aspirate
-	mix_height: height from bottom to dispense
-	'''
-	if mix_height == 0:
-		mix_height = 3
+    source_height = 3):
+    '''
+    Function for mixing a given volume in the same location a x number of repetitions.
+    source_height: height from bottom to aspirate
+    mix_height: height from bottom to dispense
+    '''
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
 
-	pip.aspirate(volume = 1,
-				 location = location.bottom(z=source_height),
-				 rate = reagent.flow_rate_aspirate_mix)
-	for _ in range(repetitions):
-		pip.aspirate(volume = volume, 
-					location = location.bottom(z=source_height), 
-					rate = reagent.flow_rate_aspirate_mix)
-		pip.dispense(volume = volume, 
-					location = location.bottom(z=mix_height), 
-					rate=reagent.flow_rate_dispense)
-	pip.dispense(volume = 1, 
-		location = location.bottom(z=mix_height), 
-			rate=reagent.flow_rate_dispense)
-	
+    if mix_height == 0:
+        mix_height = 3
+
+    pip.aspirate(volume = 1,
+                 location = location.bottom(z=source_height))
+    for _ in range(repetitions):
+        pip.aspirate(volume = volume, 
+                    location = location.bottom(z=source_height))
+        pip.dispense(volume = volume, 
+                    location = location.bottom(z=mix_height))
+
+    pip.dispense(volume = 1, 
+                location = location.bottom(z=mix_height))
+
+    restore_pip_speed(pip=pip)
+    
 def distribute_custom(pip, reagent, tube_type, volume, src, dest, max_volume=0,
-	extra_dispensal=0, disp_height=0, touch_tip_aspirate=False, 
-	touch_tip_dispense = False):
+    extra_dispensal=0, disp_height=0, touch_tip_aspirate=False, 
+    touch_tip_dispense = False):
 
-		if max_volume == 0:
-			max_volume = pip.max_volume
-		
-		if len(dest) > 1 or max_volume < (volume + extra_dispensal):
-			max_trans_per_asp = (max_volume - extra_dispensal) // volume
-		else:
-			max_trans_per_asp = 1
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = True)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
+    
+    if len(dest) > 1 or max_volume < (volume + extra_dispensal):
+        max_trans_per_asp = (max_volume - extra_dispensal) // volume
+    else:
+        max_trans_per_asp = 1
 
-		actual_blow_rate = pip.flow_rate.blow_out
-		pip.flow_rate.blow_out = reagent.flow_rate_blow_out
+    if max_trans_per_asp != 0:
 
-		if max_trans_per_asp != 0:
+        volume_per_asp = (max_trans_per_asp * volume) + extra_dispensal
 
-			volume_per_asp = (max_trans_per_asp * volume) + extra_dispensal
+        list_dest = list(divide_destinations(dest,max_trans_per_asp))
 
-			list_dest = list(divide_destinations(dest,max_trans_per_asp))
+        for i in range(len(list_dest)):
+            pickup_height = tube_type.calc_height(volume_per_asp)
 
-			for i in range(len(list_dest)):
-				pickup_height = tube_type.calc_height(volume_per_asp)
+            if tube_type.reservoir:
+                tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
+            else:
+                tube_type.actual_volume -= (max_trans_per_asp * volume)
+            
+            volume_per_asp = (len(list_dest[i]) * volume) + extra_dispensal
 
-				if tube_type.reservoir:
-					tube_type.actual_volume -= (max_trans_per_asp * volume * 8)
-				else:
-					tube_type.actual_volume -= (max_trans_per_asp * volume)
-				
-				pip.aspirate(volume=volume_per_asp, 
-							location=src.bottom(pickup_height),
-							rate=reagent.flow_rate_aspirate)
+            pip.aspirate(volume=volume_per_asp, 
+                        location=src.bottom(pickup_height))
 
-				robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
-				
-				if touch_tip_aspirate:
-						pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
-				
-				for d in list_dest[i]:
+            robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+            
+            if touch_tip_aspirate:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
+            
+            for d in list_dest[i]:
 
-					pip.dispense(volume=volume,
-								location=d.bottom(disp_height),
-								rate=reagent.flow_rate_dispense)
+                pip.dispense(volume=volume,
+                            location=d.bottom(disp_height))
 
-					robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
-					
-					if touch_tip_dispense:
-						pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
-				
-				if extra_dispensal != 0:
-					pip.blow_out(location=src.top())
+                robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
+                
+                if touch_tip_dispense:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
+            
+            if extra_dispensal != 0:
+                pip.blow_out(location=src.top())
 
-			pip.flow_rate.blow_out = actual_blow_rate
+    else:
 
-		else:
+        list_vol_per_well = divide_volume(volume,(max_volume - extra_dispensal))
 
-			list_vol_per_well = divide_volume(volume,(max_volume - extra_dispensal))
+        list_dest = dest
 
-			list_dest = dest
+        for d in list_dest:
 
-			for d in list_dest:
+            for vol in list_vol_per_well:
 
-				for vol in list_vol_per_well:
+                volume_per_asp = vol + extra_dispensal
 
-					volume_per_asp = vol + extra_dispensal
+                pickup_height = tube_type.calc_height(volume_per_asp)
 
-					pickup_height = tube_type.calc_height(volume_per_asp)
+                if tube_type.reservoir:
+                    tube_type.actual_volume -= (vol * 8)
+                else:
+                    tube_type.actual_volume -= vol
 
-					if tube_type.reservoir:
-						tube_type.actual_volume -= (vol * 8)
-					else:
-						tube_type.actual_volume -= vol
+                pip.aspirate(volume=volume_per_asp, 
+                            location=src.bottom(pickup_height))
 
-					pip.aspirate(volume=volume_per_asp, 
-								location=src.bottom(pickup_height),
-								rate=reagent.flow_rate_aspirate)
+                robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+            
+                if touch_tip_aspirate:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_aspirate_speed)
+            
+                pip.dispense(volume=vol,
+                            location=d.bottom(disp_height),
+                            rate=reagent.flow_rate_dispense)
 
-					robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
-				
-					if touch_tip_aspirate:
-						pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_aspirate_speed)
-				
-					pip.dispense(volume=vol,
-								location=d.bottom(disp_height),
-								rate=reagent.flow_rate_dispense)
+                robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
+               
+                if touch_tip_dispense:
+                    pip.touch_tip(radius=1.0,
+                                v_offset=-5,
+                                speed=reagent.touch_tip_dispense_speed)
 
-					robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
-				   
-					if touch_tip_dispense:
-						pip.touch_tip(radius=1.0,v_offset=-5,speed=reagent.touch_tip_dispense_speed)
+                if extra_dispensal != 0:
+                    pip.blow_out(location=src.top())
 
-					if extra_dispensal != 0:
-						pip.blow_out(location=src.top())
+    restore_pip_speed(pip=pip)
 
-			pip.flow_rate.blow_out = actual_blow_rate
+
+def find_side(col):
+    if col%2 == 0:
+        side = -1 # left
+    else:
+        side = 1 # right
+    return side
+
+
+def remove_supernatant(pip, reagent, tube_type, volume, src, 
+    dest, x_offset_src, max_volume=0, pickup_height=0.5, x_offset_dest=0, 
+    disp_height=0):
+
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = False)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
+
+    s = src.bottom(pickup_height).move(Point(x = x_offset_src))
+
+    d = dest.bottom(disp_height).move(Point(x = x_offset_dest))
+
+    list_vol_per_round = divide_volume(volume,max_volume)
+
+    for vol in list_vol_per_round:
+
+        #pickup_height = tube_type.calc_height(volume_per_asp)
+
+        if tube_type.reservoir:
+            tube_type.actual_volume -= (vol * 8)
+        else:
+            tube_type.actual_volume -= vol
+
+        pip.aspirate(volume=vol, 
+                    location=s)
+
+        robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+    
+        pip.dispense(volume=vol,
+                    location=d)
+
+        pip.blow_out()
+
+        robot.delay(seconds = reagent.delay_dispense) # pause for x seconds depending on reagent    
+
+    restore_pip_speed(pip=pip)
+
+
+def remove_supernatant_and_drop(pip, reagent, tube_type, volume, src, 
+    x_offset_src, max_volume=0, pickup_height=0.5):
+
+    change_pip_speed(pip=pip,
+                    reagent = reagent, 
+                    mix = False)
+    
+    if max_volume == 0:
+        max_volume = pip.max_volume
+
+    s = src.bottom(pickup_height).move(Point(x = x_offset_src))
+    
+    drop_loc = robot.loaded_labwares[12].wells()[0].top().move(Point(x=20))
+    
+    list_vol_per_round = divide_volume(volume,max_volume)
+    
+    if len(list_vol_per_round) != 1:
+
+        for i, vol in enumerate(list_vol_per_round):
+
+            if i != 0:
+                pip.dispense(volume=pip.min_volume, 
+                        location=src.top())                
+
+            if tube_type.reservoir:
+                tube_type.actual_volume -= (vol * 8)
+            else:
+                tube_type.actual_volume -= vol
+
+            pip.aspirate(volume=vol, 
+                        location=s)
+
+            robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+        
+            pip.dispense(volume=vol,
+                        location=drop_loc)
+
+            pip.blow_out()
+
+            pip.aspirate(volume=pip.min_volume, 
+                        location=drop_loc)
+    else:
+    
+        if tube_type.reservoir:
+            tube_type.actual_volume -= (volume * 8)
+        else:
+            tube_type.actual_volume -= volume
+
+        pip.aspirate(volume=volume, 
+                    location=s)
+
+        robot.delay(seconds = reagent.delay_aspirate) # pause for x seconds depending on reagent
+        
+    drop(pip)
+    
+    restore_pip_speed(pip=pip)
+   
+def aspirate_wit_scrolling(pip, volume, src, 
+    start_height = 0, stop_height = 0, x_offset_src = 0):
+
+    start_point = src._depth if start_height == 0 else start_height
+
+    stop_point = 0.0 if stop_height == 0 else stop_height
+
+    max_asp = volume/pip.min_volume
+
+    inc_step = (start_point - stop_point) / max_asp
+
+    for h in reversed(np.arange(stop_point, start_point, inc_step)):
+        s = src.bottom(h).move(Point(x = x_offset_src))
+        pip.aspirate(volume=pip.min_volume, 
+                location=s)
+
 
 
 # #####################################################
@@ -651,6 +811,8 @@ def run(ctx: protocol_api.ProtocolContext):
 	# -----------------------------------------------------
 
 	# Samples, 1 to 8 tubes 0,2 or 0,1 mL 
+	#samples_plate = robot.load_labware('opentrons_24_tuberack_nest_2ml_screwcap', '7')
+
 	samples_plate = robot.load_labware('opentrons_96_aluminumblock_generic_pcr_strip_200ul', '7')    
 
 	# Results, 8 x (1 to 8) tubes 0,2 or 0,1 mL 
@@ -676,10 +838,10 @@ def run(ctx: protocol_api.ProtocolContext):
 	# Reagents
 	# -----------------------------------------------------
 	samples_reagent = Reagent(name = 'Samples',
-                    flow_rate_aspirate = 1,
-                    flow_rate_dispense = 300,
-                    flow_rate_aspirate_mix = 1,
-                    flow_rate_dispense_mix = 300)
+					flow_rate_aspirate = 1,
+					flow_rate_dispense = 300,
+					flow_rate_aspirate_mix = 1,
+					flow_rate_dispense_mix = 300)
 					
 	# -----------------------------------------------------
 	# Tubes
@@ -701,29 +863,39 @@ def run(ctx: protocol_api.ProtocolContext):
 	def step1():
 
 		if not p20s.hw_pipette['has_tip']:
-			pick_up(p20s, tips20)
+				pick_up(p20s, tips20)
 
 		# Transfer from each NUM_SAMPLES samples tubes to the 8 rows of the result plate
 		for i, source in enumerate(samples_plate.wells()[0:NUM_SAMPLES]):
+			
+			for dest in list(results_plate.columns()[i][0:7]):
 
-			# Destination
-			dest = results_plate.columns()[i]
+				if not p20s.hw_pipette['has_tip']:
+					pick_up(p20s, tips20)
+				
+				# Distribute
+				distribute_custom(pip = p20s,
+					reagent = samples_reagent,
+					tube_type = samples_tube,
+					volume = 8,
+					src = source,
+					dest = [dest],
+					disp_height=3,
+					extra_dispensal = 0,
+					max_volume=20,
+					touch_tip_aspirate = False,
+					touch_tip_dispense = False)
 
-			# Distribute
-			distribute_custom(pip = p20s,
-				reagent = samples_reagent,
-				tube_type = samples_tube,
-				volume = 8,
-				src = source,
-				dest = dest,
-				disp_height=0.3,
-				extra_dispensal = 0,
-				max_volume=12,
-				touch_tip_aspirate = False,
-				touch_tip_dispense = False)
-
-		# Drop tip for each sample
-		drop(p20s)
+				custom_mix(pip = p20s,
+						reagent = samples_reagent,
+						repetitions = 2,
+						volume = 10,
+						location = dest,
+						mix_height = 3,
+						source_height = 3)
+				
+				# Drop tip for each sample
+				drop(p20s)
 		
 	# -----------------------------------------------------
 	# Execution plan
